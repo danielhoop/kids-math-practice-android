@@ -1,0 +1,72 @@
+Create a android app for kids to practice the calculation of multiplications and divisions.
+The language should be Kotlin.
+The default background is gray.
+
+The start screen should show two buttons to choose:
+· -> Enter multiplication menu by clicking
+: -> Enter division menu by clicking
+Let's call this `operator`.
+
+After clicking, a screen appears that shows 12 buttons with the following numbers:
+1, 2, 3
+4, 5, 6
+7, 8, 9
+10, 11, 12
+Let's call the chosen number `firstNumber`.
+
+At the bottom, there is a text input for integer that has default number of 10 written in it.
+This is the maximal multiplicator/divisor number that the app will then use to create random calculations.
+Save this into a variable called "highestNumber".
+
+There is another input there: A switch that has the icon "3 <-> 6" as description. Default is switched off. Call this `randomFirstSecond`
+
+All numbers from 1, 2, ..., highestNumber we will call "allNumbers"
+
+After the user has clicked onto a button (example 3), the app starts with a row of `highestNumber * 2` multiplications in different consecutive screens.
+The first `highestNumber` screens show in random order all possible calculations.
+Example with `operator = MULTIPLY`, `highestNumber = 10` and `firstNumber = 3`
+4 · 3
+3 · 1
+5 · 3
+3 · 7
+3 · 8
+9 · 3
+3 · 7
+6 · 3
+3 · 5
+3 · 10
+
+Notice that the app randomly places the pair of numbers. It does not necessarily start with `3 · 1` and ends with `3 · 10`.
+If `randomFirstSecond` is true, it is random whether `firstNumber` or `secondNumber` is left or right.
+Else, `secondNumber` will always be at the left.
+
+In each calculation screen that is shown to the user, like "9 · 3", this calculation is placed at the top 1/3 of the screen with nice big numbers.
+Below, there is an input field with equal size where the cursor is already placed. It is marked as a number input field, so the user android keyboard will be automatically opened and will show the user numbers to press (we want to avoid that characters are shown, so the user has to switch manually to the number input pad).
+By clicking the "Enter" key on his keyboard, the user wants the app to check the result.
+If the result was wrong, the background will turn midly red. A modal with gray background will show the user the right result like `3 · 8 = 24`. The user has to click a button with text "OK :-)". Instead of ":-)" place a smiley icon or emojy. The app saves the secondNumber that was involved in this calculation in a set called `wrongSecondNumbers`.
+If the result is right, switch to the next screen but show a nice green background for 1 second. Then fade back to the default background color.
+
+After the set of `highestNumber` calculations, the app checks `wrongSecondNumbers`.
+In the remaining `highestNumber` calculations that will follow in the current set, the app tries place calculations with these `secondNumber` at least `repeat` times. Set `repeat` as 3 for the time being. Only the app developer can change this at the moment.
+So, if `3 · 7`, that is the `secondNumber = 7` was wrong, it will appear `repeat` times in the next `highestNumber` calculations, and other calculations with other `secondNumber` will appear less.
+If there are so many `secondNumber` that need to be placed `repeat` times, then the app will randomly take the first X of these and show only these.
+Example: `wrongSecondNumbers` is (7, 6, 5, 4) were in the set of wrong calculations.
+The app will check wrongSecondNumbers.length() or something similar and do the following:
+
+if (wrongSecondNumbers.length() * repeat > highestNumber) {
+  importantNumbers = wrongSecondNumbers.randomOrder().first(floor(highestNumber / repeat))
+} else {
+  importantNumbers = wrongSecondNumbers
+}
+otherNumbers = allNumbers.setdiff(importantNumbers).randomOrder().first(highestNumber - importantNumbers.length())
+numbersInRow = importantNumbers.add(otherNumbers)
+
+Then use `numbersInRow` for the remaning `highestNumber` calculations in that set.
+
+After a set has finished, if the user had no error, show 3 cups to motivate the user.
+If there was 1 error, show 2 cups
+2 errors -> 1 cup
+Else, no cup, just a smiley.
+
+
+
