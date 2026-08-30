@@ -12,6 +12,12 @@ data class PracticeConfiguration(
     val autoEnter: Boolean,
 )
 
+data class TimerHistoryEntry(
+    val id: Long,
+    val finishedAtMillis: Long,
+    val durationMinutes: Int,
+)
+
 class ConfigurationDatabase(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -28,10 +34,14 @@ class ConfigurationDatabase(context: Context) :
             """.trimIndent(),
         )
         createScoreTable(database)
+        createTimerSettingsTable(database)
+        createTimerHistoryTable(database)
     }
 
     override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) createScoreTable(database)
+        if (oldVersion < 3) createTimerSettingsTable(database)
+        if (oldVersion < 4) createTimerHistoryTable(database)
     }
 
     fun save(operator: MathOperator, configuration: PracticeConfiguration) {
@@ -109,6 +119,68 @@ class ConfigurationDatabase(context: Context) :
         }
     }
 
+    fun saveTimerMinutes(minutes: Int) {
+        val values = ContentValues().apply {
+            put(COLUMN_TIMER_ID, TIMER_ROW_ID)
+            put(COLUMN_TIMER_MINUTES, minutes)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_TIMER_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadTimerMinutes(): Int? = readableDatabase.query(
+        TABLE_TIMER_SETTINGS,
+        arrayOf(COLUMN_TIMER_MINUTES),
+        "$COLUMN_TIMER_ID = ?",
+        arrayOf(TIMER_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst()) {
+            cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_TIMER_MINUTES))
+        } else {
+            null
+        }
+    }
+
+    fun saveTimerCompletion(finishedAtMillis: Long, durationMinutes: Int) {
+        val values = ContentValues().apply {
+            put(COLUMN_FINISHED_AT, finishedAtMillis)
+            put(COLUMN_DURATION_MINUTES, durationMinutes)
+        }
+        writableDatabase.insertOrThrow(TABLE_TIMER_HISTORY, null, values)
+    }
+
+    fun loadTimerHistory(): List<TimerHistoryEntry> = readableDatabase.query(
+        TABLE_TIMER_HISTORY,
+        arrayOf(COLUMN_HISTORY_ID, COLUMN_FINISHED_AT, COLUMN_DURATION_MINUTES),
+        null,
+        null,
+        null,
+        null,
+        "$COLUMN_FINISHED_AT DESC, $COLUMN_HISTORY_ID DESC",
+    ).use { cursor ->
+        buildList {
+            val idColumn = cursor.getColumnIndexOrThrow(COLUMN_HISTORY_ID)
+            val finishedAtColumn = cursor.getColumnIndexOrThrow(COLUMN_FINISHED_AT)
+            val durationColumn = cursor.getColumnIndexOrThrow(COLUMN_DURATION_MINUTES)
+            while (cursor.moveToNext()) {
+                add(
+                    TimerHistoryEntry(
+                        id = cursor.getLong(idColumn),
+                        finishedAtMillis = cursor.getLong(finishedAtColumn),
+                        durationMinutes = cursor.getInt(durationColumn),
+                    ),
+                )
+            }
+        }
+    }
+
     private fun createScoreTable(database: SQLiteDatabase) {
         database.execSQL(
             """
@@ -122,11 +194,36 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    private fun createTimerSettingsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_TIMER_SETTINGS (
+                $COLUMN_TIMER_ID INTEGER PRIMARY KEY,
+                $COLUMN_TIMER_MINUTES INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createTimerHistoryTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_TIMER_HISTORY (
+                $COLUMN_HISTORY_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                $COLUMN_FINISHED_AT INTEGER NOT NULL,
+                $COLUMN_DURATION_MINUTES INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 4
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
+        const val TABLE_TIMER_SETTINGS = "timer_settings"
+        const val TABLE_TIMER_HISTORY = "timer_history"
         const val COLUMN_OPERATOR = "operator"
         const val COLUMN_HIGHEST_NUMBER = "highest_number"
         const val COLUMN_RANDOM_FIRST_SECOND = "random_first_second"
@@ -134,5 +231,11 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_AUTO_ENTER = "auto_enter"
         const val COLUMN_FIRST_NUMBER = "first_number"
         const val COLUMN_ERROR_COUNT = "error_count"
+        const val COLUMN_TIMER_ID = "id"
+        const val COLUMN_TIMER_MINUTES = "minutes"
+        const val TIMER_ROW_ID = 1
+        const val COLUMN_HISTORY_ID = "history_id"
+        const val COLUMN_FINISHED_AT = "finished_at"
+        const val COLUMN_DURATION_MINUTES = "duration_minutes"
     }
 }

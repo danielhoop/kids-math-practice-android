@@ -1,6 +1,7 @@
 package com.danielhoop.timestables
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -33,6 +35,18 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var scoresByFirstNumber by mutableStateOf<Map<Int, Int>>(emptyMap())
         private set
+    var timerMinutes by mutableIntStateOf(30)
+        private set
+    var timerIsArmed by mutableStateOf(false)
+        private set
+    var remainingTimerSeconds by mutableIntStateOf(30 * 60)
+        private set
+    var showTimeUpDialog by mutableStateOf(false)
+        private set
+    var timerHistory by mutableStateOf<List<TimerHistoryEntry>>(emptyList())
+        private set
+    var isTimerHistoryLoading by mutableStateOf(false)
+        private set
     var currentCalculation by mutableStateOf<Calculation?>(null)
         private set
     var calculationNumber by mutableIntStateOf(0)
@@ -52,6 +66,27 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private val configurationDatabase = ConfigurationDatabase(application)
     private var configurationLoadJob: Job? = null
     private var scoreSaveJob: Job? = null
+    private var timerPreferenceLoadJob: Job? = null
+    private var timerHistorySaveJob: Job? = null
+    private var timerJob: Job? = null
+    private var remainingTimerMillis = 30L * 60L * 1000L
+    private var activeUntilElapsedMillis = 0L
+    private var lastTimerTickElapsedMillis = 0L
+
+    init {
+        timerPreferenceLoadJob = viewModelScope.launch {
+            val savedMinutes = withContext(Dispatchers.IO) {
+                configurationDatabase.loadTimerMinutes()
+            }
+            if (savedMinutes != null) {
+                timerMinutes = savedMinutes
+                if (!timerIsArmed) {
+                    remainingTimerMillis = savedMinutes * 60_000L
+                    updateDisplayedTimerSeconds()
+                }
+            }
+        }
+    }
 
     fun chooseOperator(value: MathOperator) {
         operator = value
@@ -77,6 +112,52 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     fun updateAutoEnter(value: Boolean) {
         autoEnter = value
+    }
+
+    fun configureTimer(minutes: Int) {
+        require(minutes > 0)
+        timerPreferenceLoadJob?.cancel()
+        timerJob?.cancel()
+        timerMinutes = minutes
+        remainingTimerMillis = minutes * 60_000L
+        updateDisplayedTimerSeconds()
+        activeUntilElapsedMillis = 0L
+        lastTimerTickElapsedMillis = SystemClock.elapsedRealtime()
+        timerIsArmed = true
+        showTimeUpDialog = false
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveTimerMinutes(minutes)
+        }
+    }
+
+    fun onAnswerDigitEntered() {
+        if (!timerIsArmed || remainingTimerMillis <= 0L) return
+        val now = SystemClock.elapsedRealtime()
+        consumeActiveTimerTime(now)
+        lastTimerTickElapsedMillis = now
+        activeUntilElapsedMillis = now + ACTIVE_INPUT_WINDOW_MILLIS
+        ensureTimerJob()
+    }
+
+    fun acknowledgeTimeUp() {
+        showTimeUpDialog = false
+        currentCalculation = null
+        screen = AppScreen.OPERATOR
+    }
+
+    fun loadTimerHistory() {
+        isTimerHistoryLoading = true
+        viewModelScope.launch {
+            timerHistorySaveJob?.join()
+            timerHistory = withContext(Dispatchers.IO) {
+                configurationDatabase.loadTimerHistory()
+            }
+            isTimerHistoryLoading = false
+        }
+    }
+
+    fun pauseTimerForBackground() {
+        pauseTimerActivity()
     }
 
     fun startPractice(chosenFirstNumber: Int) {
@@ -135,6 +216,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun goBack() {
+        if (screen == AppScreen.PRACTICE) pauseTimerActivity()
         when (screen) {
             AppScreen.OPERATOR -> Unit
             AppScreen.SETUP -> screen = AppScreen.OPERATOR
@@ -152,6 +234,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     override fun onCleared() {
+        timerJob?.cancel()
         configurationDatabase.close()
         super.onCleared()
     }
@@ -206,6 +289,50 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun ensureTimerJob() {
+        if (timerJob?.isActive == true) return
+        timerJob = viewModelScope.launch {
+            while (timerIsArmed) {
+                delay(TIMER_TICK_MILLIS)
+                val now = SystemClock.elapsedRealtime()
+                consumeActiveTimerTime(now)
+                if (!timerIsArmed || now >= activeUntilElapsedMillis) break
+            }
+        }
+    }
+
+    private fun consumeActiveTimerTime(now: Long) {
+        if (activeUntilElapsedMillis <= lastTimerTickElapsedMillis) return
+        val countedUntil = minOf(now, activeUntilElapsedMillis)
+        val elapsed = (countedUntil - lastTimerTickElapsedMillis).coerceAtLeast(0L)
+        remainingTimerMillis = (remainingTimerMillis - elapsed).coerceAtLeast(0L)
+        lastTimerTickElapsedMillis = now
+        updateDisplayedTimerSeconds()
+        if (remainingTimerMillis == 0L) {
+            timerIsArmed = false
+            activeUntilElapsedMillis = 0L
+            showTimeUpDialog = true
+            timerHistorySaveJob = viewModelScope.launch(Dispatchers.IO) {
+                configurationDatabase.saveTimerCompletion(
+                    finishedAtMillis = System.currentTimeMillis(),
+                    durationMinutes = timerMinutes,
+                )
+            }
+        }
+    }
+
+    private fun pauseTimerActivity() {
+        if (!timerIsArmed) return
+        consumeActiveTimerTime(SystemClock.elapsedRealtime())
+        activeUntilElapsedMillis = 0L
+        timerJob?.cancel()
+        timerJob = null
+    }
+
+    private fun updateDisplayedTimerSeconds() {
+        remainingTimerSeconds = ((remainingTimerMillis + 999L) / 1000L).toInt()
+    }
+
     private fun advance() {
         calculationIndex++
 
@@ -225,6 +352,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
         if (calculationIndex >= highestNumber * 2) {
             currentCalculation = null
+            pauseTimerActivity()
             saveScore()
             screen = AppScreen.RESULTS
             return
@@ -232,5 +360,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
         calculationNumber = calculationIndex + 1
         currentCalculation = calculations[calculationIndex]
+    }
+
+    private companion object {
+        const val ACTIVE_INPUT_WINDOW_MILLIS = 15_000L
+        const val TIMER_TICK_MILLIS = 250L
     }
 }

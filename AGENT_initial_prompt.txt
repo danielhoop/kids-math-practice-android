@@ -121,3 +121,32 @@ When the user enters that screen the next time, load these configurations from t
   |       2        |
   |                |
   |----------------|
+
+
+-------------------------
+Add a timer function. Add it at the very start screen when choosing the operator.
+  It is a button with a timer icon.
+  When the user starts it, ask the user in a modal for the number of minutes. Default is 30 minutes. Save that into the SQLite data as always.
+  When the user starts, the timer does not start immediately.
+  The timer starts once the user presses a number in the result input field and will run max. 15 seconds even if the user makes no other input in such a field.
+  If the user then makes no other input, the timer will not run further.
+  If the user has given another input in such a field, the window is reset to 15 seconds and the timer will continue to run.
+  So the goal is that the app only counts active screen time with a max idle time of 15 seconds.
+
+
+-------------------------
+Once the timer has finished, the app will save the date and time, as well as the total timer period that has finished in the SQLite database.
+  Whow the user a modal with the timer symbol at the top center.
+  Below in the center, a party emojy icon. The one that blows kind of a party trumped where glamour comes out.
+  Below a centered button with label "Yay!" and a happy emojy icon. This will close the modal.
+  The timer is now turned off.
+
+  In the modal where the user usually wants to start the timer, in the top right corner of that modal, add a clickable text "History".
+  When clicked, open another modal where all finished timers are shown with "Year-Month-Day hour:minute, <number of minutes> min" formatting.
+  Show the youngest entries at the top of that list.
+  This is for the parent to assure that the child has done his/her duties.
+
+
+-------------------------
+In the history formatting add the shorthand of the weekday before the date, like:
+  "Mo, Year-Month-Day hour:minute, <number of minutes> min"

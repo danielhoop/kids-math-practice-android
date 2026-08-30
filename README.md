@@ -29,6 +29,13 @@ The last score for each operator and table number is stored in SQLite as well.
 The table buttons show the same one-to-three trophy rating used on the results
 screen.
 
+An optional timer can be armed from the operator screen. Its saved duration
+defaults to 30 minutes. It only consumes time after a digit is entered in an
+answer field, and each new digit renews a maximum 15-second activity window.
+Completed timers are stored with their finish time and configured duration. The
+timer setup dialog provides a newest-first history for parents, including the
+localized abbreviated weekday for every entry.
+
 Division questions always have an integer answer and keep the chosen table
 number as the divisor. For example, choosing table 3 can produce `21 : 3`.
 
