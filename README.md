@@ -23,6 +23,10 @@ Multiplication and division keep separate settings, which are restored the next
 time their table-selection screen opens. After the results screen, the app returns
 directly to table selection.
 
+The last score for each operator and table number is stored in SQLite as well.
+The table buttons show the same one-to-three trophy rating used on the results
+screen.
+
 Division questions always have an integer answer and keep the chosen table
 number as the divisor. For example, choosing table 3 can produce `21 : 3`.
 

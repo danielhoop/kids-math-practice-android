@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -167,8 +168,26 @@ private fun SetupScreen(model: PracticeViewModel) {
                             .weight(1f)
                             .height(58.dp),
                         shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(7.dp),
                     ) {
-                        Text(number.toString(), fontSize = 23.sp)
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                number.toString(),
+                                modifier = Modifier.align(Alignment.Center),
+                                fontSize = 23.sp,
+                            )
+                            val trophyCount = trophyCountForErrors(
+                                model.scoresByFirstNumber[number],
+                            )
+                            if (trophyCount > 0) {
+                                Text(
+                                    text = "🏆".repeat(trophyCount),
+                                    modifier = Modifier.align(Alignment.TopEnd),
+                                    fontSize = 10.sp,
+                                    lineHeight = 11.sp,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -367,12 +386,7 @@ private fun AnswerInput(
 
 @Composable
 private fun ResultsScreen(errorCount: Int, onContinue: () -> Unit) {
-    val trophyCount = when (errorCount) {
-        0 -> 3
-        1 -> 2
-        2 -> 1
-        else -> 0
-    }
+    val trophyCount = trophyCountForErrors(errorCount)
     GrayPage {
         Text("Great work!", fontSize = 34.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
@@ -391,6 +405,13 @@ private fun ResultsScreen(errorCount: Int, onContinue: () -> Unit) {
             Text("Choose another table", fontSize = 19.sp)
         }
     }
+}
+
+private fun trophyCountForErrors(errorCount: Int?): Int = when (errorCount) {
+    0 -> 3
+    1 -> 2
+    2 -> 1
+    else -> 0
 }
 
 @Composable

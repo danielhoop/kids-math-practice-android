@@ -27,9 +27,12 @@ class ConfigurationDatabase(context: Context) :
             )
             """.trimIndent(),
         )
+        createScoreTable(database)
     }
 
-    override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) createScoreTable(database)
+    }
 
     fun save(operator: MathOperator, configuration: PracticeConfiguration) {
         val values = ContentValues().apply {
@@ -74,14 +77,62 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    fun saveScore(operator: MathOperator, firstNumber: Int, errorCount: Int) {
+        val values = ContentValues().apply {
+            put(COLUMN_OPERATOR, operator.name)
+            put(COLUMN_FIRST_NUMBER, firstNumber)
+            put(COLUMN_ERROR_COUNT, errorCount)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_SCORE,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadScores(operator: MathOperator): Map<Int, Int> = readableDatabase.query(
+        TABLE_SCORE,
+        arrayOf(COLUMN_FIRST_NUMBER, COLUMN_ERROR_COUNT),
+        "$COLUMN_OPERATOR = ?",
+        arrayOf(operator.name),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        buildMap {
+            val firstNumberColumn = cursor.getColumnIndexOrThrow(COLUMN_FIRST_NUMBER)
+            val errorCountColumn = cursor.getColumnIndexOrThrow(COLUMN_ERROR_COUNT)
+            while (cursor.moveToNext()) {
+                put(cursor.getInt(firstNumberColumn), cursor.getInt(errorCountColumn))
+            }
+        }
+    }
+
+    private fun createScoreTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_SCORE (
+                $COLUMN_OPERATOR TEXT NOT NULL,
+                $COLUMN_FIRST_NUMBER INTEGER NOT NULL,
+                $COLUMN_ERROR_COUNT INTEGER NOT NULL,
+                PRIMARY KEY ($COLUMN_OPERATOR, $COLUMN_FIRST_NUMBER)
+            )
+            """.trimIndent(),
+        )
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
         const val TABLE_CONFIGURATION = "practice_configuration"
+        const val TABLE_SCORE = "last_score"
         const val COLUMN_OPERATOR = "operator"
         const val COLUMN_HIGHEST_NUMBER = "highest_number"
         const val COLUMN_RANDOM_FIRST_SECOND = "random_first_second"
         const val COLUMN_WITHOUT_ONE_AND_TEN = "without_one_and_ten"
         const val COLUMN_AUTO_ENTER = "auto_enter"
+        const val COLUMN_FIRST_NUMBER = "first_number"
+        const val COLUMN_ERROR_COUNT = "error_count"
     }
 }

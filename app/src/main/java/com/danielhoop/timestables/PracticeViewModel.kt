@@ -31,6 +31,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var isConfigurationLoading by mutableStateOf(false)
         private set
+    var scoresByFirstNumber by mutableStateOf<Map<Int, Int>>(emptyMap())
+        private set
     var currentCalculation by mutableStateOf<Calculation?>(null)
         private set
     var calculationNumber by mutableIntStateOf(0)
@@ -49,10 +51,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private val wrongSecondNumbers = mutableSetOf<Int>()
     private val configurationDatabase = ConfigurationDatabase(application)
     private var configurationLoadJob: Job? = null
+    private var scoreSaveJob: Job? = null
 
     fun chooseOperator(value: MathOperator) {
         operator = value
         applyDefaultConfiguration(value)
+        scoresByFirstNumber = emptyMap()
         screen = AppScreen.SETUP
         loadConfiguration(value)
     }
@@ -164,15 +168,20 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         configurationLoadJob?.cancel()
         isConfigurationLoading = true
         configurationLoadJob = viewModelScope.launch {
-            val savedConfiguration = withContext(Dispatchers.IO) {
-                configurationDatabase.load(selectedOperator)
+            scoreSaveJob?.join()
+            val (savedConfiguration, savedScores) = withContext(Dispatchers.IO) {
+                configurationDatabase.load(selectedOperator) to
+                    configurationDatabase.loadScores(selectedOperator)
             }
-            if (operator == selectedOperator && savedConfiguration != null) {
-                highestNumberText = savedConfiguration.highestNumber.toString()
-                randomFirstSecond = selectedOperator == MathOperator.MULTIPLY &&
-                    savedConfiguration.randomFirstSecond
-                withoutOneAndTen = savedConfiguration.withoutOneAndTen
-                autoEnter = savedConfiguration.autoEnter
+            if (operator == selectedOperator) {
+                scoresByFirstNumber = savedScores
+                if (savedConfiguration != null) {
+                    highestNumberText = savedConfiguration.highestNumber.toString()
+                    randomFirstSecond = selectedOperator == MathOperator.MULTIPLY &&
+                        savedConfiguration.randomFirstSecond
+                    withoutOneAndTen = savedConfiguration.withoutOneAndTen
+                    autoEnter = savedConfiguration.autoEnter
+                }
             }
             isConfigurationLoading = false
         }
@@ -187,6 +196,13 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         )
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.save(operator, configuration)
+        }
+    }
+
+    private fun saveScore() {
+        scoresByFirstNumber = scoresByFirstNumber + (firstNumber to errorCount)
+        scoreSaveJob = viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveScore(operator, firstNumber, errorCount)
         }
     }
 
@@ -208,6 +224,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
         if (calculationIndex >= highestNumber * 2) {
             currentCalculation = null
+            saveScore()
             screen = AppScreen.RESULTS
             return
         }

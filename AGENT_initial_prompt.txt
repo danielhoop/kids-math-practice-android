@@ -105,3 +105,19 @@ When the user has finished a complete set, do not return to the very first scree
 
 Also, when the user starts a set of calculations, save all 4 configuration fields in a SQLite database.
 When the user enters that screen the next time, load these configurations from the database. The goal is that the user configuration from last time is not overwritten by the app default values.
+
+
+-------------------------
+ Also save the last achieved score per "operator" and per "firstNumber" in the database. Set/update this value each time a set is finished.
+  Use this information to show cups at the top right of each primaryNumber button.
+  If 0 errors -> 3 cups
+  1 error -> 2 cups
+  2 errors 1 cup
+  The same rule we applied at the end of a set.
+
+  A sketch of 1 button (for the number two) given that Y represents a cup and the user achieved 1 error.
+  |----------------|
+  |             YY |
+  |       2        |
+  |                |
+  |----------------|
