@@ -70,3 +70,38 @@ Else, no cup, just a smiley.
 
 
 
+-------------------------
+randomFirstSecond makes no sense for division. Always set it false for the division case.
+
+-------------------------
+In the modal where the right answer is shown. Don't show a title "Almost!"
+  Instead, show the correct result in a larger font and centered.
+  Also show the OK button centered, if possible.
+
+  Don't put a placeholder question mark "?" into the empty result field. Just leave it empty.
+
+  Instead of "swap the number positions" call it "Swap number positions randomly".
+  Activate it as default.
+
+  Add a new switch at the bottom of that screen that is called "Without 1 and 10". If it is activated, do not choose 1 and 10 as secondNumber in the set of calculations.
+  If activated, recycle random other numbers within the first half set to fill it, even though there might not be enough numbers.
+  E.g. the user chooses highestNumber = 10, but activated, then drop 1 and 10 from possible secondNumbers and choose two other numbers from 2, ... 9 instead. But to it with set calculations. Because it might
+  be highestNumber 12, then you need to include 11 and/or 12 as alternatives for 1 and 10.
+  
+-------------------------
+Activate "Without 1 and 10" as default.
+
+  Also, assure that when recyling secondNumber, assure that in a set of calculations, secondNumber does not appear twice in a row.
+  
+-------------------------
+Add another switch that says "Auto enter".
+  It is disabled by default.
+  If enabled, the app will check at each calculation how many digit the result has.
+  If the user has input the same number of digit as is expected, the app will immediately check if the result is correct and continue with the normal routine.
+  That is, for the app to check the result, the user doesn't have to press enter anymore.
+  
+-------------------------
+When the user has finished a complete set, do not return to the very first screen where the operator (addition, division) has to be chosen, but go to the screen where the user has to choose the firstNumber.
+
+Also, when the user starts a set of calculations, save all 4 configuration fields in a SQLite database.
+When the user enters that screen the next time, load these configurations from the database. The goal is that the user configuration from last time is not overwritten by the app default values.

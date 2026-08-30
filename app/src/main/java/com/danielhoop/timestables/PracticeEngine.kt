@@ -40,35 +40,105 @@ data class Calculation(
 
 /** Pure practice-row generation, kept free of Android APIs so it is easy to test. */
 object PracticeEngine {
-    fun firstRoundNumbers(highestNumber: Int, random: Random = Random.Default): List<Int> {
+    fun firstRoundNumbers(
+        highestNumber: Int,
+        withoutOneAndTen: Boolean = false,
+        random: Random = Random.Default,
+    ): List<Int> {
         require(highestNumber > 0)
-        return (1..highestNumber).shuffled(random)
+        val allowedNumbers = allowedNumbers(highestNumber, withoutOneAndTen)
+        require(allowedNumbers.isNotEmpty())
+        require(highestNumber == 1 || allowedNumbers.size >= 2)
+        return arrangeWithoutAdjacentDuplicates(
+            numbers = fillRound(
+            requiredNumbers = allowedNumbers.shuffled(random),
+            fillNumbers = allowedNumbers,
+            size = highestNumber,
+            random = random,
+            ),
+            random = random,
+        )
     }
 
     fun reviewRoundNumbers(
         highestNumber: Int,
         wrongSecondNumbers: Set<Int>,
+        withoutOneAndTen: Boolean = false,
         random: Random = Random.Default,
         repeat: Int = REPEAT_WRONG_NUMBER,
     ): List<Int> {
         require(highestNumber > 0)
         require(repeat > 0)
 
-        val allNumbers = (1..highestNumber).toList()
-        val validWrongNumbers = wrongSecondNumbers.filter { it in 1..highestNumber }
-        val maximumImportant = highestNumber / repeat
+        val allNumbers = allowedNumbers(highestNumber, withoutOneAndTen)
+        require(allNumbers.isNotEmpty())
+        require(highestNumber == 1 || allNumbers.size >= 2)
+        val validWrongNumbers = wrongSecondNumbers.filter { it in allNumbers }
+        // A number can occupy at most every other position without touching itself.
+        val safeRepeat = min(repeat, (highestNumber + 1) / 2)
+        val maximumImportant = highestNumber / safeRepeat
         val importantNumbers = validWrongNumbers
             .shuffled(random)
             .take(min(validWrongNumbers.size, maximumImportant))
 
-        val repeatedImportant = importantNumbers.flatMap { number -> List(repeat) { number } }
+        val repeatedImportant = importantNumbers.flatMap { number -> List(safeRepeat) { number } }
         val remainingCount = highestNumber - repeatedImportant.size
-        val otherNumbers = allNumbers
+        val otherNumberPool = allNumbers
             .filterNot { it in importantNumbers }
-            .shuffled(random)
-            .take(remainingCount)
+            .ifEmpty { allNumbers }
+        val otherNumbers = fillRound(
+            requiredNumbers = otherNumberPool.shuffled(random),
+            fillNumbers = otherNumberPool,
+            size = remainingCount,
+            random = random,
+        )
 
-        return (repeatedImportant + otherNumbers).shuffled(random)
+        return arrangeWithoutAdjacentDuplicates(repeatedImportant + otherNumbers, random)
+    }
+
+    private fun allowedNumbers(highestNumber: Int, withoutOneAndTen: Boolean): List<Int> =
+        (1..highestNumber).filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+
+    private fun fillRound(
+        requiredNumbers: List<Int>,
+        fillNumbers: List<Int>,
+        size: Int,
+        random: Random,
+    ): List<Int> {
+        if (size == 0) return emptyList()
+        require(fillNumbers.isNotEmpty())
+        val result = requiredNumbers.take(size).toMutableList()
+        while (result.size < size) {
+            fillNumbers.shuffled(random).forEach { number ->
+                if (result.size < size) result += number
+            }
+        }
+        return result
+    }
+
+    private fun arrangeWithoutAdjacentDuplicates(
+        numbers: List<Int>,
+        random: Random,
+    ): List<Int> {
+        val remaining = numbers.groupingBy { it }.eachCount().toMutableMap()
+        require((remaining.values.maxOrNull() ?: 0) <= (numbers.size + 1) / 2)
+        val arranged = ArrayList<Int>(numbers.size)
+
+        while (remaining.isNotEmpty()) {
+            val candidates = remaining.filterKeys { it != arranged.lastOrNull() }
+            require(candidates.isNotEmpty())
+            val highestRemainingCount = candidates.maxOf { it.value }
+            val nextNumber = candidates
+                .filterValues { it == highestRemainingCount }
+                .keys
+                .toList()
+                .random(random)
+            arranged += nextNumber
+            val newCount = remaining.getValue(nextNumber) - 1
+            if (newCount == 0) remaining.remove(nextNumber) else remaining[nextNumber] = newCount
+        }
+
+        return arranged
     }
 
     fun calculations(

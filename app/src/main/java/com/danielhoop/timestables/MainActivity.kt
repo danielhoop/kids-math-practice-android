@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -90,7 +93,7 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
         AppScreen.OPERATOR -> OperatorScreen(model::chooseOperator)
         AppScreen.SETUP -> SetupScreen(model)
         AppScreen.PRACTICE -> PracticeScreen(model)
-        AppScreen.RESULTS -> ResultsScreen(model.errorCount, model::startOver)
+        AppScreen.RESULTS -> ResultsScreen(model.errorCount, model::returnToSetup)
     }
 }
 
@@ -124,12 +127,24 @@ private fun SetupScreen(model: PracticeViewModel) {
         containerColor = DefaultGray,
         topBar = { BackBar(model::goBack) },
     ) { padding ->
+        if (model.isConfigurationLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 24.dp, vertical = 12.dp)
-                .imePadding(),
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -157,7 +172,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                     }
                 }
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 value = model.highestNumberText,
                 onValueChange = model::updateHighestNumber,
@@ -178,13 +193,39 @@ private fun SetupScreen(model: PracticeViewModel) {
                 ) {
                     Column {
                         Text("3 ↔ 6", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Swap the number positions", fontSize = 14.sp)
+                        Text("Swap number positions randomly", fontSize = 14.sp)
                     }
                     Switch(
                         checked = model.randomFirstSecond,
                         onCheckedChange = model::updateRandomFirstSecond,
                     )
                 }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Without 1 and 10", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Switch(
+                    checked = model.withoutOneAndTen,
+                    onCheckedChange = model::updateWithoutOneAndTen,
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Auto enter", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Switch(
+                    checked = model.autoEnter,
+                    onCheckedChange = model::updateAutoEnter,
+                )
             }
         }
     }
@@ -243,6 +284,8 @@ private fun PracticeScreen(model: PracticeViewModel) {
             Spacer(Modifier.height(24.dp))
             AnswerInput(
                 questionNumber = model.calculationNumber,
+                expectedAnswer = calculation.expectedAnswer,
+                autoEnter = model.autoEnter,
                 enabled = !isWrong,
                 onSubmit = model::submitAnswer,
             )
@@ -254,17 +297,21 @@ private fun PracticeScreen(model: PracticeViewModel) {
         AlertDialog(
             onDismissRequest = {},
             containerColor = DefaultGray,
-            title = { Text("Almost!", fontSize = 27.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     "${wrongCalculation.expression} = ${wrongCalculation.expectedAnswer}",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 40.sp,
+                    lineHeight = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                 )
             },
             confirmButton = {
-                Button(onClick = model::acceptCorrectAnswer) {
-                    Text("OK 😊", fontSize = 18.sp)
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Button(onClick = model::acceptCorrectAnswer) {
+                        Text("OK 😊", fontSize = 18.sp)
+                    }
                 }
             },
         )
@@ -272,7 +319,13 @@ private fun PracticeScreen(model: PracticeViewModel) {
 }
 
 @Composable
-private fun AnswerInput(questionNumber: Int, enabled: Boolean, onSubmit: (String) -> Unit) {
+private fun AnswerInput(
+    questionNumber: Int,
+    expectedAnswer: Int,
+    autoEnter: Boolean,
+    enabled: Boolean,
+    onSubmit: (String) -> Unit,
+) {
     var answer by remember(questionNumber) { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -285,7 +338,14 @@ private fun AnswerInput(questionNumber: Int, enabled: Boolean, onSubmit: (String
 
     OutlinedTextField(
         value = answer,
-        onValueChange = { value -> if (value.all(Char::isDigit)) answer = value },
+        onValueChange = { value ->
+            if (value.all(Char::isDigit)) {
+                answer = value
+                if (autoEnter && value.length == expectedAnswer.toString().length) {
+                    onSubmit(value)
+                }
+            }
+        },
         enabled = enabled,
         singleLine = true,
         textStyle = androidx.compose.ui.text.TextStyle(
@@ -302,12 +362,11 @@ private fun AnswerInput(questionNumber: Int, enabled: Boolean, onSubmit: (String
             .fillMaxWidth()
             .height(92.dp)
             .focusRequester(focusRequester),
-        placeholder = { Text("?", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
     )
 }
 
 @Composable
-private fun ResultsScreen(errorCount: Int, onStartOver: () -> Unit) {
+private fun ResultsScreen(errorCount: Int, onContinue: () -> Unit) {
     val trophyCount = when (errorCount) {
         0 -> 3
         1 -> 2
@@ -328,8 +387,8 @@ private fun ResultsScreen(errorCount: Int, onStartOver: () -> Unit) {
             fontSize = 21.sp,
         )
         Spacer(Modifier.height(42.dp))
-        Button(onClick = onStartOver, modifier = Modifier.height(56.dp)) {
-            Text("Practice again", fontSize = 19.sp)
+        Button(onClick = onContinue, modifier = Modifier.height(56.dp)) {
+            Text("Choose another table", fontSize = 19.sp)
         }
     }
 }
