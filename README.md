@@ -11,6 +11,8 @@ division. It is written in Kotlin with Jetpack Compose.
    “Without 1 and 10” is enabled by default. It excludes those second numbers
    and recycles other allowed numbers to keep both rounds the requested length.
    Recycled numbers are arranged so the same number never appears twice in a row.
+   The first question of the review half also differs from the final question of
+   the initial half.
    The optional “Auto enter” setting submits an answer as soon as the expected
    number of digits has been typed.
 3. Complete two rounds. The first includes every number from 1 through the

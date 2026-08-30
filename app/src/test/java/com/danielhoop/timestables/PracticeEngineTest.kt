@@ -119,6 +119,41 @@ class PracticeEngineTest {
         }
     }
 
+    @Test
+    fun secondRoundDoesNotRepeatTheLastNumberFromFirstRound() {
+        repeat(50) { seed ->
+            val firstRound = PracticeEngine.firstRoundNumbers(
+                highestNumber = 10,
+                withoutOneAndTen = true,
+                random = Random(seed),
+            )
+            val reviewRound = PracticeEngine.reviewRoundNumbers(
+                highestNumber = 10,
+                wrongSecondNumbers = setOf(2, 3, 4),
+                withoutOneAndTen = true,
+                previousSecondNumber = firstRound.last(),
+                random = Random(seed + 100),
+            )
+
+            assertTrue(firstRound.last() != reviewRound.first())
+            assertNoAdjacentDuplicates(reviewRound)
+        }
+    }
+
+    @Test
+    fun boundaryRuleIsKeptWhenAShortReviewPlanMustBeRebalanced() {
+        val reviewRound = PracticeEngine.reviewRoundNumbers(
+            highestNumber = 3,
+            wrongSecondNumbers = setOf(2),
+            withoutOneAndTen = true,
+            previousSecondNumber = 2,
+            random = Random(101),
+        )
+
+        assertTrue(reviewRound.first() != 2)
+        assertNoAdjacentDuplicates(reviewRound)
+    }
+
     private fun assertNoAdjacentDuplicates(numbers: List<Int>) {
         assertTrue(numbers.zipWithNext().all { (first, second) -> first != second })
     }

@@ -64,6 +64,7 @@ object PracticeEngine {
         highestNumber: Int,
         wrongSecondNumbers: Set<Int>,
         withoutOneAndTen: Boolean = false,
+        previousSecondNumber: Int? = null,
         random: Random = Random.Default,
         repeat: Int = REPEAT_WRONG_NUMBER,
     ): List<Int> {
@@ -93,7 +94,12 @@ object PracticeEngine {
             random = random,
         )
 
-        return arrangeWithoutAdjacentDuplicates(repeatedImportant + otherNumbers, random)
+        return arrangeWithoutAdjacentDuplicates(
+            numbers = repeatedImportant + otherNumbers,
+            random = random,
+            forbiddenFirstNumber = previousSecondNumber,
+            fallbackNumbers = allNumbers,
+        )
     }
 
     private fun allowedNumbers(highestNumber: Int, withoutOneAndTen: Boolean): List<Int> =
@@ -119,25 +125,55 @@ object PracticeEngine {
     private fun arrangeWithoutAdjacentDuplicates(
         numbers: List<Int>,
         random: Random,
+        forbiddenFirstNumber: Int? = null,
+        fallbackNumbers: List<Int> = numbers.distinct(),
     ): List<Int> {
-        val remaining = numbers.groupingBy { it }.eachCount().toMutableMap()
-        require((remaining.values.maxOrNull() ?: 0) <= (numbers.size + 1) / 2)
-        val arranged = ArrayList<Int>(numbers.size)
-
-        while (remaining.isNotEmpty()) {
-            val candidates = remaining.filterKeys { it != arranged.lastOrNull() }
-            require(candidates.isNotEmpty())
-            val highestRemainingCount = candidates.maxOf { it.value }
-            val nextNumber = candidates
-                .filterValues { it == highestRemainingCount }
-                .keys
-                .toList()
-                .random(random)
-            arranged += nextNumber
-            val newCount = remaining.getValue(nextNumber) - 1
-            if (newCount == 0) remaining.remove(nextNumber) else remaining[nextNumber] = newCount
+        val firstCandidates = numbers
+            .distinct()
+            .filter { it != forbiddenFirstNumber }
+            .shuffled(random)
+        firstCandidates.forEach { firstNumber ->
+            tryArrange(numbers, firstNumber, random)?.let { return it }
         }
 
+        // This only occurs for a constrained short round such as [2, 2, 3]
+        // following a 2. Cycle through all allowed values to satisfy both
+        // adjacency guarantees even though the desired repetition count cannot fit.
+        val allowed = fallbackNumbers.distinct()
+        require(allowed.size >= 2)
+        val fallbackFirst = allowed.filter { it != forbiddenFirstNumber }.random(random)
+        val cycle = listOf(fallbackFirst) +
+            allowed.filter { it != fallbackFirst }.shuffled(random)
+        return List(numbers.size) { index -> cycle[index % cycle.size] }
+    }
+
+    private fun tryArrange(
+        numbers: List<Int>,
+        firstNumber: Int,
+        random: Random,
+    ): List<Int>? {
+        val remaining = numbers.groupingBy { it }.eachCount().toMutableMap()
+        val arranged = ArrayList<Int>(numbers.size)
+
+        fun append(number: Int) {
+            arranged += number
+            val newCount = remaining.getValue(number) - 1
+            if (newCount == 0) remaining.remove(number) else remaining[number] = newCount
+        }
+
+        append(firstNumber)
+        while (remaining.isNotEmpty()) {
+            val candidates = remaining.filterKeys { it != arranged.last() }
+            if (candidates.isEmpty()) return null
+            val highestRemainingCount = candidates.maxOf { it.value }
+            append(
+                candidates
+                    .filterValues { it == highestRemainingCount }
+                    .keys
+                    .toList()
+                    .random(random),
+            )
+        }
         return arranged
     }
 

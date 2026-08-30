@@ -217,6 +217,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     highestNumber = highestNumber,
                     wrongSecondNumbers = wrongSecondNumbers,
                     withoutOneAndTen = withoutOneAndTen,
+                    previousSecondNumber = calculations.last().secondNumber,
                 ),
                 randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
             )
