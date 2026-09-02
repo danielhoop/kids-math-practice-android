@@ -45,6 +45,7 @@ object PracticeEngine {
         highestNumber: Int,
         withoutOneAndTen: Boolean = false,
         keepSetLength: Boolean = forceSetLength,
+        orderedNumbers: Boolean = false,
         random: Random = Random.Default,
     ): List<Int> {
         require(highestNumber > 0)
@@ -52,6 +53,9 @@ object PracticeEngine {
         require(allowedNumbers.isNotEmpty())
         require(highestNumber == 1 || allowedNumbers.size >= 2)
         val roundSize = if (keepSetLength) highestNumber else allowedNumbers.size
+        if (orderedNumbers) {
+            return List(roundSize) { index -> allowedNumbers[index % allowedNumbers.size] }
+        }
         return arrangeWithoutAdjacentDuplicates(
             numbers = fillRound(
                 requiredNumbers = allowedNumbers.shuffled(random),
@@ -69,6 +73,7 @@ object PracticeEngine {
         withoutOneAndTen: Boolean = false,
         previousSecondNumber: Int? = null,
         keepSetLength: Boolean = forceSetLength,
+        orderedNumbers: Boolean = false,
         random: Random = Random.Default,
         repeat: Int = REPEAT_WRONG_NUMBER,
     ): List<Int> {
@@ -88,7 +93,7 @@ object PracticeEngine {
         val safeRepeat = min(repeat, (roundSize + 1) / 2)
         val maximumImportant = roundSize / safeRepeat
         val importantNumbers = validWrongNumbers
-            .shuffled(random)
+            .let { numbers -> if (orderedNumbers) numbers.sorted() else numbers.shuffled(random) }
             .take(min(validWrongNumbers.size, maximumImportant))
 
         val repeatedImportant = importantNumbers.flatMap { number -> List(safeRepeat) { number } }
@@ -97,15 +102,19 @@ object PracticeEngine {
             .filterNot { it in importantNumbers }
             .ifEmpty { allNumbers }
         val otherNumbers = fillRound(
-            requiredNumbers = otherNumberPool.shuffled(random),
+            requiredNumbers = if (orderedNumbers) otherNumberPool else otherNumberPool.shuffled(random),
             fillNumbers = otherNumberPool,
             size = remainingCount,
-            random = random,
+            random = if (orderedNumbers) Random(0) else random,
         )
+
+        if (orderedNumbers && importantNumbers.isEmpty()) {
+            return List(roundSize) { index -> allNumbers[index % allNumbers.size] }
+        }
 
         return arrangeWithoutAdjacentDuplicates(
             numbers = repeatedImportant + otherNumbers,
-            random = random,
+            random = if (orderedNumbers) Random(0) else random,
             forbiddenFirstNumber = previousSecondNumber,
             fallbackNumbers = allNumbers,
         )

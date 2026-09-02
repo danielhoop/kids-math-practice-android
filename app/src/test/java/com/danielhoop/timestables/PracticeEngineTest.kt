@@ -100,6 +100,31 @@ class PracticeEngineTest {
     }
 
     @Test
+    fun orderedFirstRoundUsesIncreasingAllowedNumbers() {
+        val numbers = PracticeEngine.firstRoundNumbers(
+            highestNumber = 12,
+            withoutOneAndTen = true,
+            orderedNumbers = true,
+            random = Random(10),
+        )
+
+        assertEquals(listOf(2, 3, 4, 5, 6, 7, 8, 9, 11, 12), numbers)
+    }
+
+    @Test
+    fun orderedErrorFreeReviewUsesIncreasingAllowedNumbers() {
+        val numbers = PracticeEngine.reviewRoundNumbers(
+            highestNumber = 10,
+            wrongSecondNumbers = emptySet(),
+            withoutOneAndTen = true,
+            orderedNumbers = true,
+            random = Random(11),
+        )
+
+        assertEquals(listOf(2, 3, 4, 5, 6, 7, 8, 9), numbers)
+    }
+
+    @Test
     fun reviewRoundAlsoExcludesOneAndTen() {
         val numbers = PracticeEngine.reviewRoundNumbers(
             highestNumber = 10,

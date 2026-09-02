@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -57,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -74,6 +77,7 @@ private val DefaultGray = Color(0xFFD4D4D4)
 private val MildGreen = Color(0xFFB8E6C0)
 private val MildRed = Color(0xFFF2B8B5)
 private val Purple = Color(0xFF6352C7)
+private val ConfigurationLabelFontSize = 18.sp
 
 class MainActivity : ComponentActivity() {
     private val practiceModel: PracticeViewModel by viewModels()
@@ -333,6 +337,23 @@ private fun SetupScreen(model: PracticeViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "1, 2, 3, ..., 10",
+                    fontSize = ConfigurationLabelFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Switch(
+                    checked = model.orderedNumbers,
+                    onCheckedChange = model::updateOrderedNumbers,
+                )
+            }
             if (model.operator == MathOperator.MULTIPLY) {
                 Row(
                     modifier = Modifier
@@ -342,7 +363,11 @@ private fun SetupScreen(model: PracticeViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column {
-                        Text("3 ↔ 6", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "3 × 6 ↔ 6 × 3",
+                            fontSize = ConfigurationLabelFontSize,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Text("Swap number positions randomly", fontSize = 14.sp)
                     }
                     Switch(
@@ -358,7 +383,11 @@ private fun SetupScreen(model: PracticeViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Without 1 and 10", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Without 1 and 10",
+                    fontSize = ConfigurationLabelFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Switch(
                     checked = model.withoutOneAndTen,
                     onCheckedChange = model::updateWithoutOneAndTen,
@@ -371,7 +400,11 @@ private fun SetupScreen(model: PracticeViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Auto enter", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Auto enter",
+                    fontSize = ConfigurationLabelFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Switch(
                     checked = model.autoEnter,
                     onCheckedChange = model::updateAutoEnter,
@@ -386,6 +419,8 @@ private fun PracticeScreen(model: PracticeViewModel) {
     val calculation = model.currentCalculation ?: return
     var showGreen by remember { mutableStateOf(false) }
     val isWrong = model.wrongDialogCalculation != null
+    val isBlockingDialog = isWrong || model.retryCalculation != null ||
+        model.showLeaveConfirmation || model.showTimeUpDialog
     val targetColor = when {
         isWrong -> MildRed
         showGreen -> MildGreen
@@ -449,7 +484,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
                 questionNumber = model.calculationNumber,
                 expectedAnswer = calculation.expectedAnswer,
                 autoEnter = model.autoEnter,
-                enabled = !isWrong,
+                enabled = !isBlockingDialog,
                 onDigitEntered = model::onAnswerDigitEntered,
                 onSubmit = model::submitAnswer,
             )
@@ -479,7 +514,37 @@ private fun PracticeScreen(model: PracticeViewModel) {
                 }
             },
         )
-    } else model.wrongDialogCalculation?.let { wrongCalculation ->
+    } else if (model.showLeaveConfirmation) {
+        AlertDialog(
+            onDismissRequest = model::continuePractice,
+            containerColor = DefaultGray,
+            title = { Text("Leave this set?", fontWeight = FontWeight.Bold) },
+            text = { Text("Your current progress in this set will be lost.") },
+            confirmButton = {
+                Button(onClick = model::continuePractice) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Continue")
+                        CalculatorIcon()
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = model::confirmLeavePractice) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Leave")
+                        DoorIcon()
+                    }
+                }
+            },
+        )
+    } else if (model.wrongDialogCalculation != null) {
+        val wrongCalculation = model.wrongDialogCalculation ?: return
         AlertDialog(
             onDismissRequest = {},
             containerColor = DefaultGray,
@@ -500,6 +565,34 @@ private fun PracticeScreen(model: PracticeViewModel) {
                     }
                 }
             },
+        )
+    } else if (model.retryCalculation != null) {
+        val retryCalculation = model.retryCalculation ?: return
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = DefaultGray,
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        retryCalculation.expression,
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = 40.sp,
+                        lineHeight = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    AnswerInput(
+                        questionNumber = model.retryPromptSequence,
+                        expectedAnswer = retryCalculation.expectedAnswer,
+                        autoEnter = model.autoEnter,
+                        enabled = true,
+                        onDigitEntered = model::onAnswerDigitEntered,
+                        onSubmit = model::submitRetryAnswer,
+                    )
+                }
+            },
+            confirmButton = {},
         )
     }
 }
@@ -604,6 +697,65 @@ private fun historyCups(entry: TimerHistoryEntry): Int {
         percentage >= 95.0 -> 2
         percentage >= 90.0 -> 1
         else -> 0
+    }
+}
+
+@Composable
+private fun CalculatorIcon() {
+    val color = LocalContentColor.current
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx())
+        drawRoundRect(
+            color = color,
+            size = size,
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(3.dp.toPx(), 6.dp.toPx()),
+            end = androidx.compose.ui.geometry.Offset(size.width - 3.dp.toPx(), 6.dp.toPx()),
+            strokeWidth = 1.8.dp.toPx(),
+        )
+        listOf(5f to 10f, 10f to 10f, 5f to 14f, 10f to 14f).forEach { (x, y) ->
+            drawCircle(color = color, radius = 1.2.dp.toPx(), center = androidx.compose.ui.geometry.Offset(x.dp.toPx(), y.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun DoorIcon() {
+    val color = LocalContentColor.current
+    Canvas(Modifier.size(18.dp)) {
+        val stroke = Stroke(width = 1.8.dp.toPx())
+        val left = 2.dp.toPx()
+        val top = 2.dp.toPx()
+        val bottom = size.height - 2.dp.toPx()
+        val frameRight = 10.dp.toPx()
+
+        // Flat door frame, like a conventional exit sign.
+        drawLine(color, androidx.compose.ui.geometry.Offset(left, bottom), androidx.compose.ui.geometry.Offset(left, top), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(left, top), androidx.compose.ui.geometry.Offset(frameRight, top), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(frameRight, top), androidx.compose.ui.geometry.Offset(frameRight, bottom), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(left, bottom), androidx.compose.ui.geometry.Offset(frameRight, bottom), stroke.width)
+
+        // Small escape-style walking figure moving from left to right.
+        drawCircle(
+            color = color,
+            radius = 1.35.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(5.dp.toPx(), 5.5.dp.toPx()),
+        )
+        drawLine(color, androidx.compose.ui.geometry.Offset(5.dp.toPx(), 7.dp.toPx()), androidx.compose.ui.geometry.Offset(6.dp.toPx(), 10.5.dp.toPx()), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(5.5.dp.toPx(), 8.dp.toPx()), androidx.compose.ui.geometry.Offset(3.5.dp.toPx(), 10.dp.toPx()), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(5.5.dp.toPx(), 8.dp.toPx()), androidx.compose.ui.geometry.Offset(8.dp.toPx(), 9.dp.toPx()), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(6.dp.toPx(), 10.5.dp.toPx()), androidx.compose.ui.geometry.Offset(4.dp.toPx(), 14.5.dp.toPx()), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(6.dp.toPx(), 10.5.dp.toPx()), androidx.compose.ui.geometry.Offset(8.dp.toPx(), 14.dp.toPx()), stroke.width)
+
+        // Direction arrow to the right of the door.
+        val arrowY = 10.dp.toPx()
+        drawLine(color, androidx.compose.ui.geometry.Offset(11.dp.toPx(), arrowY), androidx.compose.ui.geometry.Offset(17.dp.toPx(), arrowY), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(17.dp.toPx(), arrowY), androidx.compose.ui.geometry.Offset(14.5.dp.toPx(), 7.5.dp.toPx()), stroke.width)
+        drawLine(color, androidx.compose.ui.geometry.Offset(17.dp.toPx(), arrowY), androidx.compose.ui.geometry.Offset(14.5.dp.toPx(), 12.5.dp.toPx()), stroke.width)
     }
 }
 

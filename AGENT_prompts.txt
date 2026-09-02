@@ -217,3 +217,54 @@ The timeout should only be stopped when the user has written a result AND has pr
 
 -------------------------
 › You messed up something with the timer and timeout. It runs for 1 second after the user has pressed enter and stops immediately.
+
+
+-------------------------
+› Few things to improve:
+
+  Bugfix: When the timer has ended and the user presses the "Yay!" button, the current set is cancelled. This should
+  not happen. The user should be able to continue the current set. Simply close the "Yay!" modal.
+
+  New feature: When the user enters a wrong result and the app shows the right result in a modal... After the user has
+  pressed "ok" to close the modal, immediately open a new modal and ask the user to give the result for that exact
+  calculation that he/se has just gotten wrong. If wrong again, show the modal that shows the right result, and enter
+  an endless loop until the user has given the right result. Once the right result is given, return back to the normal
+  set. Those extra iterations in modals are not counted in the number of attempts. Neither increase the overall counter
+  nor the number of right/wrong entries.
+
+  New feature: When user is in the process of doing a set and presses "return/back", ask in a modal whether the user is
+  sure to leave. Offer two buttons: "Leave <door icon>", "Continue <calculator icon>" where "Continue" is the primary
+  choice.
+
+  New feature: Add a ned configuration switch that will also be saved to the database. It is labelled "1, 2, 3, ...,
+  10". If enabled, there will be no random sort of calculations but they will increase incrementally (in each half
+  set).
+
+
+-------------------------
+› 1) Apps crashes at startup. Fix it.
+  2) Revert this change: "- Multiplication-side swapping is disabled automatically so the display stays ordered.". The
+  user can do it himself with the configuration.
+  3) Place the "1, 2, 3, ..., 10" configuration as the first switch. Default is false.
+  4) Add a database migration script for the new configuration "Consecutive calculations" ("1, 2, 3, ..., 10").
+
+
+-------------------------
+› The label "1, 2, 3, ..., 10", "3 <-> 6", "Without 1 and 10" and "Auto enter" don't seem to have the same size.
+  Especially "1, 2, 3, ..., 10" seems small. Not sure if "3 <-> 6" is also a little bit larger than the others.
+  Harmonize it. "Without 1 and 10" has the right size. Take that as reference. And save that size somewhere into a variable. Do not hard code the number in different places.
+  In addition, rename "3 <-> 6" to "3 x 6 <-> 6 x 3"
+
+› The icons on the buttons "Leave" and "Continue" should be black/white, that is, in the color of the button/font which is currently purple. They should be schematic with fewer details. These current icons I can hardly recognize as such
+
+› Try to draw an opened door. The current one is a little bit too simple. Or you could try to draw a person leaving through the door. There are these escape signs in green/white color in europe that schematically show exactly this. You could try such an approach but still with our inherited button/font colors
+
+› You got the perspective wrong. Remove that open door that is directed towards the user. Also, the person should go from left to right. To the right of the door, add a arrow sign like in the european escape
+  images. like this:
+
+  |-------|
+  |   0   |   \
+  |  / \  | --->
+  |   |   |   /
+  |  / /  |
+  |-------|

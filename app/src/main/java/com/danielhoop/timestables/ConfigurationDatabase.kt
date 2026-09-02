@@ -10,6 +10,7 @@ data class PracticeConfiguration(
     val randomFirstSecond: Boolean,
     val withoutOneAndTen: Boolean,
     val autoEnter: Boolean,
+    val orderedNumbers: Boolean,
 )
 
 data class TimerHistoryEntry(
@@ -31,7 +32,8 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_HIGHEST_NUMBER INTEGER NOT NULL,
                 $COLUMN_RANDOM_FIRST_SECOND INTEGER NOT NULL,
                 $COLUMN_WITHOUT_ONE_AND_TEN INTEGER NOT NULL,
-                $COLUMN_AUTO_ENTER INTEGER NOT NULL
+                $COLUMN_AUTO_ENTER INTEGER NOT NULL,
+                $COLUMN_ORDERED_NUMBERS INTEGER NOT NULL
             )
             """.trimIndent(),
         )
@@ -44,6 +46,16 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 2) createScoreTable(database)
         if (oldVersion < 3) createTimerSettingsTable(database)
         if (oldVersion < 4) createTimerHistoryTable(database)
+        if (oldVersion < 6) addOrderedNumbersColumn(database)
+    }
+
+    override fun onOpen(database: SQLiteDatabase) {
+        super.onOpen(database)
+        // Repairs databases opened by the brief version-6 build that did not
+        // yet include the migration.
+        if (!hasColumn(database, TABLE_CONFIGURATION, COLUMN_ORDERED_NUMBERS)) {
+            addOrderedNumbersColumn(database)
+        }
     }
 
     fun save(operator: MathOperator, configuration: PracticeConfiguration) {
@@ -53,6 +65,7 @@ class ConfigurationDatabase(context: Context) :
             put(COLUMN_RANDOM_FIRST_SECOND, configuration.randomFirstSecond)
             put(COLUMN_WITHOUT_ONE_AND_TEN, configuration.withoutOneAndTen)
             put(COLUMN_AUTO_ENTER, configuration.autoEnter)
+            put(COLUMN_ORDERED_NUMBERS, configuration.orderedNumbers)
         }
         writableDatabase.insertWithOnConflict(
             TABLE_CONFIGURATION,
@@ -69,6 +82,7 @@ class ConfigurationDatabase(context: Context) :
             COLUMN_RANDOM_FIRST_SECOND,
             COLUMN_WITHOUT_ONE_AND_TEN,
             COLUMN_AUTO_ENTER,
+            COLUMN_ORDERED_NUMBERS,
         ),
         "$COLUMN_OPERATOR = ?",
         arrayOf(operator.name),
@@ -86,6 +100,9 @@ class ConfigurationDatabase(context: Context) :
                 cursor.getColumnIndexOrThrow(COLUMN_WITHOUT_ONE_AND_TEN),
             ) != 0,
             autoEnter = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_AUTO_ENTER)) != 0,
+            orderedNumbers = cursor.getInt(
+                cursor.getColumnIndexOrThrow(COLUMN_ORDERED_NUMBERS),
+            ) != 0,
         )
     }
 
@@ -213,6 +230,22 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    private fun addOrderedNumbersColumn(database: SQLiteDatabase) {
+        database.execSQL(
+            "ALTER TABLE $TABLE_CONFIGURATION ADD COLUMN " +
+                "$COLUMN_ORDERED_NUMBERS INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+
+    private fun hasColumn(database: SQLiteDatabase, table: String, column: String): Boolean =
+        database.rawQuery("PRAGMA table_info($table)", null).use { cursor ->
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameColumn) == column) return@use true
+            }
+            false
+        }
+
     private fun createTimerSettingsTable(database: SQLiteDatabase) {
         database.execSQL(
             """
@@ -240,7 +273,7 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 5
+        const val DATABASE_VERSION = 6
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -250,6 +283,7 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_RANDOM_FIRST_SECOND = "random_first_second"
         const val COLUMN_WITHOUT_ONE_AND_TEN = "without_one_and_ten"
         const val COLUMN_AUTO_ENTER = "auto_enter"
+        const val COLUMN_ORDERED_NUMBERS = "ordered_numbers"
         const val COLUMN_FIRST_NUMBER = "first_number"
         const val COLUMN_ERROR_COUNT = "error_count"
         const val COLUMN_TIMER_ID = "id"

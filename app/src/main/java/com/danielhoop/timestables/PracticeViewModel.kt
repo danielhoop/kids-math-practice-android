@@ -29,6 +29,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var autoEnter by mutableStateOf(false)
         private set
+    var orderedNumbers by mutableStateOf(false)
+        private set
     var highestNumberError by mutableStateOf<String?>(null)
         private set
     var isConfigurationLoading by mutableStateOf(false)
@@ -54,6 +56,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     var totalCalculationCount by mutableIntStateOf(0)
         private set
     var wrongDialogCalculation by mutableStateOf<Calculation?>(null)
+        private set
+    var retryCalculation by mutableStateOf<Calculation?>(null)
+        private set
+    var retryPromptSequence by mutableIntStateOf(0)
+        private set
+    var showLeaveConfirmation by mutableStateOf(false)
         private set
     var correctFlashSequence by mutableIntStateOf(0)
         private set
@@ -119,6 +127,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         autoEnter = value
     }
 
+    fun updateOrderedNumbers(value: Boolean) {
+        orderedNumbers = value
+    }
+
     fun configureTimer(minutes: Int) {
         require(minutes > 0)
         timerPreferenceLoadJob?.cancel()
@@ -149,8 +161,6 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     fun acknowledgeTimeUp() {
         showTimeUpDialog = false
-        currentCalculation = null
-        screen = AppScreen.OPERATOR
     }
 
     fun loadTimerHistory() {
@@ -188,11 +198,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         correctFlashSequence = 0
         wrongSecondNumbers.clear()
         wrongDialogCalculation = null
+        retryCalculation = null
+        showLeaveConfirmation = false
         saveConfiguration()
         val firstRoundNumbers = PracticeEngine.firstRoundNumbers(
             highestNumber = highestNumber,
             withoutOneAndTen = withoutOneAndTen,
             keepSetLength = forceSetLength,
+            orderedNumbers = orderedNumbers,
         )
         firstRoundLength = firstRoundNumbers.size
         totalCalculationCount = firstRoundLength * 2
@@ -207,7 +220,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun submitAnswer(answerText: String) {
-        if (wrongDialogCalculation != null) return
+        if (wrongDialogCalculation != null || retryCalculation != null) return
         val calculation = currentCalculation ?: return
         val answer = answerText.toIntOrNull() ?: return
         if (timerIsArmed) {
@@ -230,18 +243,47 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun acceptCorrectAnswer() {
-        if (wrongDialogCalculation == null) return
+        val calculation = wrongDialogCalculation ?: return
         wrongDialogCalculation = null
-        advance()
+        retryCalculation = calculation
+        retryPromptSequence++
+    }
+
+    fun submitRetryAnswer(answerText: String) {
+        val calculation = retryCalculation ?: return
+        val answer = answerText.toIntOrNull() ?: return
+        if (timerIsArmed) renewTimerActivityWindow()
+        if (answer == calculation.expectedAnswer) {
+            retryCalculation = null
+            advance()
+        } else {
+            retryCalculation = null
+            wrongDialogCalculation = calculation
+        }
     }
 
     fun goBack() {
-        if (screen == AppScreen.PRACTICE) pauseTimerActivity()
+        if (screen == AppScreen.PRACTICE) {
+            showLeaveConfirmation = true
+            return
+        }
         when (screen) {
             AppScreen.OPERATOR -> Unit
             AppScreen.SETUP -> screen = AppScreen.OPERATOR
             AppScreen.PRACTICE, AppScreen.RESULTS -> screen = AppScreen.SETUP
         }
+    }
+
+    fun confirmLeavePractice() {
+        showLeaveConfirmation = false
+        retryCalculation = null
+        wrongDialogCalculation = null
+        pauseTimerActivity()
+        screen = AppScreen.SETUP
+    }
+
+    fun continuePractice() {
+        showLeaveConfirmation = false
     }
 
     fun startOver() {
@@ -264,6 +306,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         randomFirstSecond = selectedOperator == MathOperator.MULTIPLY
         withoutOneAndTen = true
         autoEnter = false
+        orderedNumbers = false
         highestNumberError = null
     }
 
@@ -284,6 +327,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                         savedConfiguration.randomFirstSecond
                     withoutOneAndTen = savedConfiguration.withoutOneAndTen
                     autoEnter = savedConfiguration.autoEnter
+                    orderedNumbers = savedConfiguration.orderedNumbers
                 }
             }
             isConfigurationLoading = false
@@ -296,6 +340,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
             withoutOneAndTen = withoutOneAndTen,
             autoEnter = autoEnter,
+            orderedNumbers = orderedNumbers,
         )
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.save(operator, configuration)
@@ -378,6 +423,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     withoutOneAndTen = withoutOneAndTen,
                     previousSecondNumber = calculations.last().secondNumber,
                     keepSetLength = forceSetLength,
+                    orderedNumbers = orderedNumbers,
                 ),
                 randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
             )
