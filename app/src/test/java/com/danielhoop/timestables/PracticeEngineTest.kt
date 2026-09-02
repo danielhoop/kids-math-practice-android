@@ -25,6 +25,11 @@ class PracticeEngineTest {
         assertEquals(10, numbers.size)
         assertEquals(3, numbers.count { it == 4 })
         assertEquals(3, numbers.count { it == 7 })
+        assertTrue(
+            numbers.groupingBy { it }.eachCount()
+                .filterKeys { it !in setOf(4, 7) }
+                .values.all { it == 1 },
+        )
     }
 
     @Test
@@ -49,10 +54,11 @@ class PracticeEngineTest {
     }
 
     @Test
-    fun firstRoundExcludesOneAndTenAndRecyclesOtherNumbers() {
+    fun forcedSetLengthExcludesOneAndTenAndRecyclesOtherNumbers() {
         val numbers = PracticeEngine.firstRoundNumbers(
             highestNumber = 12,
             withoutOneAndTen = true,
+            keepSetLength = true,
             random = Random(6),
         )
 
@@ -63,6 +69,34 @@ class PracticeEngineTest {
         assertTrue(11 in numbers)
         assertTrue(12 in numbers)
         assertNoAdjacentDuplicates(numbers)
+    }
+
+    @Test
+    fun flexibleSetLengthDoesNotRecycleExcludedNumbers() {
+        val numbers = PracticeEngine.firstRoundNumbers(
+            highestNumber = 12,
+            withoutOneAndTen = true,
+            keepSetLength = false,
+            random = Random(8),
+        )
+
+        assertEquals(10, numbers.size)
+        assertEquals((2..9).toSet() + setOf(11, 12), numbers.toSet())
+        assertTrue(numbers.groupingBy { it }.eachCount().values.all { it == 1 })
+    }
+
+    @Test
+    fun flexibleErrorFreeReviewHasSameShortLengthAsFirstRound() {
+        val numbers = PracticeEngine.reviewRoundNumbers(
+            highestNumber = 10,
+            wrongSecondNumbers = emptySet(),
+            withoutOneAndTen = true,
+            keepSetLength = false,
+            random = Random(9),
+        )
+
+        assertEquals(8, numbers.size)
+        assertEquals((2..9).toSet(), numbers.toSet())
     }
 
     @Test
@@ -92,9 +126,9 @@ class PracticeEngineTest {
             random = Random(5),
         ).single()
 
-        assertEquals("21 : 3", normal.expression)
+        assertEquals("21 ÷ 3", normal.expression)
         assertEquals(7, normal.expectedAnswer)
-        assertEquals("21 : 3", generated.expression)
+        assertEquals("21 ÷ 3", generated.expression)
         assertEquals(7, generated.expectedAnswer)
         assertEquals(false, generated.swapRoles)
     }
@@ -105,6 +139,7 @@ class PracticeEngineTest {
             val firstRound = PracticeEngine.firstRoundNumbers(
                 highestNumber = 10,
                 withoutOneAndTen = true,
+                keepSetLength = true,
                 random = Random(seed),
             )
             val reviewRound = PracticeEngine.reviewRoundNumbers(

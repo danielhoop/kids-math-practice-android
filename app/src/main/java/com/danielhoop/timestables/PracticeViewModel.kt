@@ -51,6 +51,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var calculationNumber by mutableIntStateOf(0)
         private set
+    var totalCalculationCount by mutableIntStateOf(0)
+        private set
     var wrongDialogCalculation by mutableStateOf<Calculation?>(null)
         private set
     var correctFlashSequence by mutableIntStateOf(0)
@@ -62,6 +64,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private var firstNumber = 1
     private var calculations = emptyList<Calculation>()
     private var calculationIndex = 0
+    private var firstRoundLength = 0
     private val wrongSecondNumbers = mutableSetOf<Int>()
     private val configurationDatabase = ConfigurationDatabase(application)
     private var configurationLoadJob: Job? = null
@@ -72,6 +75,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private var remainingTimerMillis = 30L * 60L * 1000L
     private var activeUntilElapsedMillis = 0L
     private var lastTimerTickElapsedMillis = 0L
+    private var timedNumberOfCalculations = 0
+    private var timedCorrectCalculations = 0
 
     init {
         timerPreferenceLoadJob = viewModelScope.launch {
@@ -125,6 +130,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         lastTimerTickElapsedMillis = SystemClock.elapsedRealtime()
         timerIsArmed = true
         showTimeUpDialog = false
+        timedNumberOfCalculations = 0
+        timedCorrectCalculations = 0
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.saveTimerMinutes(minutes)
         }
@@ -133,9 +140,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     fun onAnswerDigitEntered() {
         if (!timerIsArmed || remainingTimerMillis <= 0L) return
         val now = SystemClock.elapsedRealtime()
+        if (now < activeUntilElapsedMillis) return
         consumeActiveTimerTime(now)
         lastTimerTickElapsedMillis = now
-        activeUntilElapsedMillis = now + ACTIVE_INPUT_WINDOW_MILLIS
+        activeUntilElapsedMillis = now + ACTIVE_INPUT_TIMEOUT_SECONDS * 1000L
         ensureTimerJob()
     }
 
@@ -181,13 +189,17 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         wrongSecondNumbers.clear()
         wrongDialogCalculation = null
         saveConfiguration()
+        val firstRoundNumbers = PracticeEngine.firstRoundNumbers(
+            highestNumber = highestNumber,
+            withoutOneAndTen = withoutOneAndTen,
+            keepSetLength = forceSetLength,
+        )
+        firstRoundLength = firstRoundNumbers.size
+        totalCalculationCount = firstRoundLength * 2
         calculations = PracticeEngine.calculations(
             operator = operator,
             firstNumber = firstNumber,
-            secondNumbers = PracticeEngine.firstRoundNumbers(
-                highestNumber = highestNumber,
-                withoutOneAndTen = withoutOneAndTen,
-            ),
+            secondNumbers = firstRoundNumbers,
             randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
         )
         currentCalculation = calculations.first()
@@ -198,6 +210,11 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         if (wrongDialogCalculation != null) return
         val calculation = currentCalculation ?: return
         val answer = answerText.toIntOrNull() ?: return
+        if (timerIsArmed) {
+            timedNumberOfCalculations++
+            if (answer == calculation.expectedAnswer) timedCorrectCalculations++
+            renewTimerActivityWindow()
+        }
 
         if (answer == calculation.expectedAnswer) {
             correctFlashSequence++
@@ -205,6 +222,9 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         } else {
             errorCount++
             wrongSecondNumbers += calculation.secondNumber
+            if (!forceSetLength && calculationIndex < firstRoundLength) {
+                totalCalculationCount = firstRoundLength + highestNumber
+            }
             wrongDialogCalculation = calculation
         }
     }
@@ -301,6 +321,16 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun renewTimerActivityWindow() {
+        if (!timerIsArmed || remainingTimerMillis <= 0L) return
+        val now = SystemClock.elapsedRealtime()
+        consumeActiveTimerTime(now)
+        if (!timerIsArmed) return
+        lastTimerTickElapsedMillis = now
+        activeUntilElapsedMillis = now + ACTIVE_INPUT_TIMEOUT_SECONDS * 1000L
+        ensureTimerJob()
+    }
+
     private fun consumeActiveTimerTime(now: Long) {
         if (activeUntilElapsedMillis <= lastTimerTickElapsedMillis) return
         val countedUntil = minOf(now, activeUntilElapsedMillis)
@@ -316,6 +346,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                 configurationDatabase.saveTimerCompletion(
                     finishedAtMillis = System.currentTimeMillis(),
                     durationMinutes = timerMinutes,
+                    correctCalculations = timedCorrectCalculations,
+                    numberOfCalculations = timedNumberOfCalculations,
                 )
             }
         }
@@ -336,7 +368,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private fun advance() {
         calculationIndex++
 
-        if (calculationIndex == highestNumber) {
+        if (calculationIndex == firstRoundLength) {
             calculations = calculations + PracticeEngine.calculations(
                 operator = operator,
                 firstNumber = firstNumber,
@@ -345,12 +377,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     wrongSecondNumbers = wrongSecondNumbers,
                     withoutOneAndTen = withoutOneAndTen,
                     previousSecondNumber = calculations.last().secondNumber,
+                    keepSetLength = forceSetLength,
                 ),
                 randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
             )
+            totalCalculationCount = calculations.size
         }
 
-        if (calculationIndex >= highestNumber * 2) {
+        if (calculationIndex >= calculations.size) {
             currentCalculation = null
             pauseTimerActivity()
             saveScore()
@@ -363,7 +397,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private companion object {
-        const val ACTIVE_INPUT_WINDOW_MILLIS = 15_000L
+        const val ACTIVE_INPUT_TIMEOUT_SECONDS = 30
         const val TIMER_TICK_MILLIS = 250L
     }
 }

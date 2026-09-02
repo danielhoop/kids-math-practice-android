@@ -125,8 +125,8 @@ private fun OperatorScreen(model: PracticeViewModel) {
         Text("What would you like to practice?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(42.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            OperatorButton("·") { model.chooseOperator(MathOperator.MULTIPLY) }
-            OperatorButton(":") { model.chooseOperator(MathOperator.DIVIDE) }
+            OperatorButton("×") { model.chooseOperator(MathOperator.MULTIPLY) }
+            OperatorButton("÷") { model.chooseOperator(MathOperator.DIVIDE) }
         }
         Spacer(Modifier.height(34.dp))
         Button(onClick = { showTimerDialog = true }) {
@@ -218,9 +218,12 @@ private fun OperatorScreen(model: PracticeViewModel) {
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(model.timerHistory, key = { it.id }) { entry ->
+                            val cups = historyCups(entry)
                             Text(
                                 text = "${formatHistoryDate(entry.finishedAtMillis)}, " +
-                                    "${entry.durationMinutes} min",
+                                    "${entry.durationMinutes} min " +
+                                    "(${entry.correctCalculations}/${entry.numberOfCalculations}" +
+                                    if (cups > 0) " ${"🏆".repeat(cups)})" else ")",
                                 fontSize = 17.sp,
                             )
                         }
@@ -419,7 +422,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "${model.calculationNumber} / ${model.highestNumberText.toInt() * 2}",
+                    "${model.calculationNumber} / ${model.totalCalculationCount}",
                     fontSize = 16.sp,
                     color = Color.DarkGray,
                 )
@@ -588,7 +591,21 @@ private fun formatTimer(totalSeconds: Int): String {
 }
 
 private fun formatHistoryDate(timestampMillis: Long): String =
-    SimpleDateFormat("EEE, yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+    SimpleDateFormat("EEE", Locale.getDefault())
+        .format(Date(timestampMillis))
+        .trimEnd('.') + "., " +
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+
+private fun historyCups(entry: TimerHistoryEntry): Int {
+    if (entry.numberOfCalculations == 0) return 0
+    val percentage = entry.correctCalculations * 100.0 / entry.numberOfCalculations
+    return when {
+        percentage >= 98.0 -> 3
+        percentage >= 95.0 -> 2
+        percentage >= 90.0 -> 1
+        else -> 0
+    }
+}
 
 @Composable
 private fun GrayPage(content: @Composable ColumnScope.() -> Unit) {

@@ -4,10 +4,11 @@ import kotlin.math.min
 import kotlin.random.Random
 
 const val REPEAT_WRONG_NUMBER = 3
+const val forceSetLength = false
 
 enum class MathOperator(val symbol: String) {
-    MULTIPLY("·"),
-    DIVIDE(":"),
+    MULTIPLY("×"),
+    DIVIDE("÷"),
 }
 
 data class Calculation(
@@ -43,18 +44,20 @@ object PracticeEngine {
     fun firstRoundNumbers(
         highestNumber: Int,
         withoutOneAndTen: Boolean = false,
+        keepSetLength: Boolean = forceSetLength,
         random: Random = Random.Default,
     ): List<Int> {
         require(highestNumber > 0)
         val allowedNumbers = allowedNumbers(highestNumber, withoutOneAndTen)
         require(allowedNumbers.isNotEmpty())
         require(highestNumber == 1 || allowedNumbers.size >= 2)
+        val roundSize = if (keepSetLength) highestNumber else allowedNumbers.size
         return arrangeWithoutAdjacentDuplicates(
             numbers = fillRound(
-            requiredNumbers = allowedNumbers.shuffled(random),
-            fillNumbers = allowedNumbers,
-            size = highestNumber,
-            random = random,
+                requiredNumbers = allowedNumbers.shuffled(random),
+                fillNumbers = allowedNumbers,
+                size = roundSize,
+                random = random,
             ),
             random = random,
         )
@@ -65,6 +68,7 @@ object PracticeEngine {
         wrongSecondNumbers: Set<Int>,
         withoutOneAndTen: Boolean = false,
         previousSecondNumber: Int? = null,
+        keepSetLength: Boolean = forceSetLength,
         random: Random = Random.Default,
         repeat: Int = REPEAT_WRONG_NUMBER,
     ): List<Int> {
@@ -75,15 +79,20 @@ object PracticeEngine {
         require(allNumbers.isNotEmpty())
         require(highestNumber == 1 || allNumbers.size >= 2)
         val validWrongNumbers = wrongSecondNumbers.filter { it in allNumbers }
+        val roundSize = if (keepSetLength || validWrongNumbers.isNotEmpty()) {
+            highestNumber
+        } else {
+            allNumbers.size
+        }
         // A number can occupy at most every other position without touching itself.
-        val safeRepeat = min(repeat, (highestNumber + 1) / 2)
-        val maximumImportant = highestNumber / safeRepeat
+        val safeRepeat = min(repeat, (roundSize + 1) / 2)
+        val maximumImportant = roundSize / safeRepeat
         val importantNumbers = validWrongNumbers
             .shuffled(random)
             .take(min(validWrongNumbers.size, maximumImportant))
 
         val repeatedImportant = importantNumbers.flatMap { number -> List(safeRepeat) { number } }
-        val remainingCount = highestNumber - repeatedImportant.size
+        val remainingCount = roundSize - repeatedImportant.size
         val otherNumberPool = allNumbers
             .filterNot { it in importantNumbers }
             .ifEmpty { allNumbers }

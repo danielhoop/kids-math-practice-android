@@ -150,3 +150,70 @@ Once the timer has finished, the app will save the date and time, as well as the
 -------------------------
 In the history formatting add the shorthand of the weekday before the date, like:
   "Mo, Year-Month-Day hour:minute, <number of minutes> min"
+
+
+-------------------------
+> When creating a set of random numbers, assure that each number is only taken once. Still apply the special rule that we apply in the second half of the set where we use the wrong secondNumbers `repeat` times. That is, assure that all wrong numbers are contained exactly `repeat` times, but then, fill the remaining space with random numbers that each appear only once and do not overlap with the wrongNumbers already being containted `repeat` times in the set.
+
+This conflicts with the existing “Without 1 and 10” rule: with highestNumber = 10, only eight unique values (2…9) remain, but each half currently requires ten calculations.
+
+  Should I:
+
+  1. Shorten each half to the number of available unique values, or
+  2. Keep highestNumber calculations and permit recycled duplicates only when exclusion leaves too few unique values?
+
+› Is that the reason why I saw duplicates...? Or did you not check for duplicates yet?
+• Yes.
+
+› OK, so when two recyclings are necessary, you recycle at most 2 times but not more?
+• Yes.
+
+> Okay, then the app already behaves correctly. But let us add a config variable that only the developer can change. It is called `forceSetLength`. Set it to false to test the new feature that you should
+  implement:
+  If forceSetLength == true, then the half set will still have highestNumber of entries and recycling is done. Just as now. Don't change anything.
+  But if forceSetLength == false, then the first half will only have highestNumber of entries but without 1 (and without 10) if highestNumber is greater or equal 10. E.g. it will only be 8 entries leftover.
+  If forceSetLength == false, the second half of the set will only have higestNumber entries, if there were errors in the first round, because then we will fill it up with the `repeat` entries. Otherwiese
+  apply the same rule as in the first half of the set.
+  If forceSetLength == true, keep it exactly as it is right now.
+  
+• Implemented the developer-only configuration:
+
+  const val forceSetLength = false
+
+  Behavior:
+
+  - forceSetLength = true: preserves the previous fixed-length recycling behavior.
+  - forceSetLength = false:
+      - First half contains each allowed number exactly once.
+      - With highestNumber = 10 and exclusions enabled, the first half has 8 questions.
+      - An error-free second half follows the same shorter unique-number rule.
+      - If the first half contains errors, the review half expands to highestNumber.
+      - Wrong numbers appear exactly repeat times.
+      - Remaining positions use unique numbers that do not overlap with repeated wrong numbers.
+
+
+-------------------------
+Timer and timeout setting: Increase the timeout seconds to 30 instead of 15 seconds. Save this number into a const val that the developer chan change. We might decide to make it configurable by the user later.
+
+
+-------------------------
+The timeout should only be stopped when the user has written a result AND has pressed enter (or auto enter was applied by the app because enough digits were entered).
+  Also, while the timer is running, save a score: numberOfCalculations which will be incrementally increased. And correctCalculations which will be increased only in case the result was correct.
+  Add this into the history and adapt the display of the history to:
+  "Mo., Year-Month-Day hour:minute, <number of minutes> min (<correctCalculations>/<numberOfCalculations>)". Write it like this, do not calculate a percentace for the user.
+  But calculate a percentace in the background. If at least 90% were correct, add one cup within the brackets. If at least 95% were correct, add 2 cups. If at least 98 were correct, add 3 cups.
+  The placing of cups, you do on the fly. Don't store it in the database.
+  Do not create a database migration script. I will clear the app data before I will install a new version.
+
+
+-------------------------
+› Start screen buttons look too similar to dices.
+  Change the symbol 1 from "·" to a cross that is usually used for multiplication.
+  Change the symbol 2 from ":" to a typical division sign. That sign looks like:
+  ·
+  -
+  ·
+
+
+-------------------------
+› You messed up something with the timer and timeout. It runs for 1 second after the user has pressed enter and stops immediately.

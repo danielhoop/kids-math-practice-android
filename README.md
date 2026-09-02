@@ -5,12 +5,14 @@ division. It is written in Kotlin with Jetpack Compose.
 
 ## Practice flow
 
-1. Choose multiplication (`·`) or division (`:`).
+1. Choose multiplication (`×`) or division (`÷`).
 2. Choose a table from 1 through 12 and the highest practice number. For
    multiplication, you can also choose whether the number positions may swap.
-   “Without 1 and 10” is enabled by default. It excludes those second numbers
-   and recycles other allowed numbers to keep both rounds the requested length.
-   Recycled numbers are arranged so the same number never appears twice in a row.
+   “Without 1 and 10” is enabled by default. It excludes those second numbers.
+   The developer setting `forceSetLength` controls whether other allowed numbers
+   are recycled to preserve the configured length. It currently defaults to false,
+   so error-free halves contain each allowed number exactly once. A review half
+   with errors still expands to the configured length for targeted repetition.
    The first question of the review half also differs from the final question of
    the initial half.
    The optional “Auto enter” setting submits an answer as soon as the expected
@@ -31,13 +33,17 @@ screen.
 
 An optional timer can be armed from the operator screen. Its saved duration
 defaults to 30 minutes. It only consumes time after a digit is entered in an
-answer field, and each new digit renews a maximum 15-second activity window.
+answer field. A submitted numeric answer renews the maximum 30-second activity
+window so timing continues into the next calculation. Individual digits do not
+keep extending an already-active window. The developer-facing
+`ACTIVE_INPUT_TIMEOUT_SECONDS` constant controls the idle timeout.
 Completed timers are stored with their finish time and configured duration. The
 timer setup dialog provides a newest-first history for parents, including the
-localized abbreviated weekday for every entry.
+localized abbreviated weekday and the correct/total calculation score for every
+entry. History derives one, two, or three cups at 90%, 95%, or 98% accuracy.
 
 Division questions always have an integer answer and keep the chosen table
-number as the divisor. For example, choosing table 3 can produce `21 : 3`.
+number as the divisor. For example, choosing table 3 can produce `21 ÷ 3`.
 
 ## Build
 

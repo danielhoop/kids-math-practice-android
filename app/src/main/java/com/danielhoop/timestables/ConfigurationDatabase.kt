@@ -16,6 +16,8 @@ data class TimerHistoryEntry(
     val id: Long,
     val finishedAtMillis: Long,
     val durationMinutes: Int,
+    val correctCalculations: Int,
+    val numberOfCalculations: Int,
 )
 
 class ConfigurationDatabase(context: Context) :
@@ -148,17 +150,30 @@ class ConfigurationDatabase(context: Context) :
         }
     }
 
-    fun saveTimerCompletion(finishedAtMillis: Long, durationMinutes: Int) {
+    fun saveTimerCompletion(
+        finishedAtMillis: Long,
+        durationMinutes: Int,
+        correctCalculations: Int,
+        numberOfCalculations: Int,
+    ) {
         val values = ContentValues().apply {
             put(COLUMN_FINISHED_AT, finishedAtMillis)
             put(COLUMN_DURATION_MINUTES, durationMinutes)
+            put(COLUMN_CORRECT_CALCULATIONS, correctCalculations)
+            put(COLUMN_NUMBER_OF_CALCULATIONS, numberOfCalculations)
         }
         writableDatabase.insertOrThrow(TABLE_TIMER_HISTORY, null, values)
     }
 
     fun loadTimerHistory(): List<TimerHistoryEntry> = readableDatabase.query(
         TABLE_TIMER_HISTORY,
-        arrayOf(COLUMN_HISTORY_ID, COLUMN_FINISHED_AT, COLUMN_DURATION_MINUTES),
+        arrayOf(
+            COLUMN_HISTORY_ID,
+            COLUMN_FINISHED_AT,
+            COLUMN_DURATION_MINUTES,
+            COLUMN_CORRECT_CALCULATIONS,
+            COLUMN_NUMBER_OF_CALCULATIONS,
+        ),
         null,
         null,
         null,
@@ -169,12 +184,16 @@ class ConfigurationDatabase(context: Context) :
             val idColumn = cursor.getColumnIndexOrThrow(COLUMN_HISTORY_ID)
             val finishedAtColumn = cursor.getColumnIndexOrThrow(COLUMN_FINISHED_AT)
             val durationColumn = cursor.getColumnIndexOrThrow(COLUMN_DURATION_MINUTES)
+            val correctColumn = cursor.getColumnIndexOrThrow(COLUMN_CORRECT_CALCULATIONS)
+            val numberColumn = cursor.getColumnIndexOrThrow(COLUMN_NUMBER_OF_CALCULATIONS)
             while (cursor.moveToNext()) {
                 add(
                     TimerHistoryEntry(
                         id = cursor.getLong(idColumn),
                         finishedAtMillis = cursor.getLong(finishedAtColumn),
                         durationMinutes = cursor.getInt(durationColumn),
+                        correctCalculations = cursor.getInt(correctColumn),
+                        numberOfCalculations = cursor.getInt(numberColumn),
                     ),
                 )
             }
@@ -211,7 +230,9 @@ class ConfigurationDatabase(context: Context) :
             CREATE TABLE IF NOT EXISTS $TABLE_TIMER_HISTORY (
                 $COLUMN_HISTORY_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_FINISHED_AT INTEGER NOT NULL,
-                $COLUMN_DURATION_MINUTES INTEGER NOT NULL
+                $COLUMN_DURATION_MINUTES INTEGER NOT NULL,
+                $COLUMN_CORRECT_CALCULATIONS INTEGER NOT NULL,
+                $COLUMN_NUMBER_OF_CALCULATIONS INTEGER NOT NULL
             )
             """.trimIndent(),
         )
@@ -219,7 +240,7 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 4
+        const val DATABASE_VERSION = 5
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -237,5 +258,7 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_HISTORY_ID = "history_id"
         const val COLUMN_FINISHED_AT = "finished_at"
         const val COLUMN_DURATION_MINUTES = "duration_minutes"
+        const val COLUMN_CORRECT_CALCULATIONS = "correct_calculations"
+        const val COLUMN_NUMBER_OF_CALCULATIONS = "number_of_calculations"
     }
 }
