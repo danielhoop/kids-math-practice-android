@@ -350,3 +350,7 @@ For the following calculations add extra rules (as last priority):
 -->
  8 x  5 = 40
 40 +  5 = 45
+
+
+-------------------------
+The app switches in some kind of a dark mode. Then, some font is white. Inhibit this behavior. It should always look the same (at least for the time being).
