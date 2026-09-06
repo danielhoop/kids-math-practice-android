@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -417,6 +418,8 @@ private fun SetupScreen(model: PracticeViewModel) {
 @Composable
 private fun PracticeScreen(model: PracticeViewModel) {
     val calculation = model.currentCalculation ?: return
+    val hintLines = calculation.hintLines()
+    var showHintDialog by remember(model.calculationNumber) { mutableStateOf(false) }
     var showGreen by remember { mutableStateOf(false) }
     val isWrong = model.wrongDialogCalculation != null
     val isBlockingDialog = isWrong || model.retryCalculation != null ||
@@ -469,6 +472,15 @@ private fun PracticeScreen(model: PracticeViewModel) {
                         color = Color.DarkGray,
                     )
                 }
+                if (hintLines != null && !isBlockingDialog) {
+                    TextButton(
+                        onClick = { showHintDialog = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Text("?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             Spacer(Modifier.weight(0.65f))
             Text(
@@ -492,7 +504,40 @@ private fun PracticeScreen(model: PracticeViewModel) {
         }
     }
 
-    if (model.showTimeUpDialog) {
+    if (showHintDialog && !isBlockingDialog) {
+        AlertDialog(
+            onDismissRequest = { showHintDialog = false },
+            containerColor = DefaultGray,
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    hintLines?.forEach { line ->
+                        if (line.isBlank()) {
+                            Spacer(Modifier.height(14.dp))
+                        } else {
+                            Text(
+                                text = line,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.End,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 19.sp,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Button(onClick = { showHintDialog = false }) {
+                        Text("OK")
+                    }
+                }
+            },
+        )
+    } else if (model.showTimeUpDialog) {
         AlertDialog(
             onDismissRequest = {},
             containerColor = DefaultGray,

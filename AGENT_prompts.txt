@@ -268,3 +268,85 @@ The timeout should only be stopped when the user has written a result AND has pr
   |   |   |   /
   |  / /  |
   |-------|
+
+
+-------------------------
+I want the app to give hints to the user.
+Place a question mark button at the top right corner of the screen where a calculation is shown. But only if the calculation qualifies for a hint.
+When the user clicks it, open a modal and show the hints that I am now providing to you. They should be right aligned. Add a OK button, also right aligned.
+Use a font like Lucida Console where all letters/digits use the same amount of horizontal space.
+When displaying numbers in these example calculations, first check the maximum digits of the numbers involved. If it's 1 digit, nothing to consider in addition. If it's 2 digits, add to all 1 digit numbers involved a trailing whitespace. If it's 3 digits, add to all 2 digit numbers involved a trailing whitespace, and to all 1 digit numbers involved 2 trailing whitespaces.
+Example for a case with two 1 digit numbers, but the largest number has two digits. For the result shown as "__" take also the same number of digits, in this case 2.
+" 5 *  6 = 30"
+"30 +  6 = __"
+
+Here are the hints and when they should be shown:
+* Rule: Always, when the calculation contains a 2 with an arbitrary multiplier, say X, show the following, where you into X the actual number
+  X + X = ___
+
+* Rule: Always, when the calculation contains a 3 with an arbitrary multiplier, say X, show the following, where you into X the actual number
+  X + X + X = ___
+
+* Rule: Always, when the calculation contains a 4 with an arbitrary multiplier, say X, show the following, where you into X the actual number, and you put into ... the result of that calculation.
+    5 *  X = ...
+  ... -  X = ___
+
+* Rule: Always, when the calculation contains a 6 with an arbitrary multiplier, say X, show the following, where you into X the actual number, and you put into ... the result of that calculation.
+    5 *  X = ...
+  ... +  X = ___
+
+* Rule: Always, when the calculation contains a 7 with an arbitrary multiplier, say X, show the following, where you into X the actual number, and you put into ... the result of that calculation.
+    5 *  X      = ...
+  ... +  X +  X = ___
+
+* Rule: Always, when the calculation contains a 8 with an arbitrary multiplier, say X, show the following, where you into X the actual number, and you put into ... the result of that calculation.
+   10 *  X      = ...
+  ... -  X -  X = ___
+
+* Rule: Always, when the calculation contains a 9 with an arbitrary multiplier, say X, show the following, where you into X the actual number, and you put into ... the result of that calculation.
+   10 *  X = ...
+  ... -  X = ___
+
+
+-------------------------
+There is a problem for cases where two rules may apply... It is confusing when both are shown right after another. Add an additional new horizontal line with enough whitespace between the two approaches.
+For the ordering of the approaches (which to show first, which second) use the following rules:
+* The rule for the number 6
+* The rule for the number 4
+* The rule for the number 9
+* The rule for the number 2
+* The rule for the number 7
+* The rule for the number 3
+* The rule for the number 8
+
+
+-------------------------
+Make the rule for the number 2 involved the first priority of all
+
+
+-------------------------
+If a calculation contains the number 5 already, do not show a hint for the cases 6, 4, 7, 8. Because those start with "5 * X" and that is already baked into the original calculation.
+
+
+-------------------------
+For the following calculations add extra rules (as last priority):
+
+5 * 3  OR  3 * 5
+-->
+ 2 x  5 = 10
+10 +  5 = 15
+
+5 * 5
+-->
+ 4 x  5 = 20
+20 +  5 = 25
+
+5 * 7  OR  7 * 5
+-->
+ 6 x  5 = 30
+30 +  5 = 35
+
+5 * 9  OR  9 * 5
+-->
+ 8 x  5 = 40
+40 +  5 = 45

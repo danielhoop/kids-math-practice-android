@@ -5,6 +5,9 @@ import kotlin.random.Random
 
 const val REPEAT_WRONG_NUMBER = 3
 const val forceSetLength = false
+private const val HINT_SEPARATOR = "----------------"
+private val FIVE_BASED_HINT_TARGETS = setOf(4, 6, 7, 8)
+private val HintPriority = listOf(2, 6, 4, 9, 7, 3, 8)
 
 enum class MathOperator(val symbol: String) {
     MULTIPLY("×"),
@@ -38,6 +41,102 @@ data class Calculation(
             }
         }
 }
+
+/** Returns the optional, monospaced arithmetic hint for a multiplication table. */
+fun Calculation.hintLines(): List<String>? {
+    if (operator != MathOperator.MULTIPLY) return null
+    val factors = listOf(firstNumber, secondNumber)
+    val eligibleTargets = factors
+        .filter {
+            it in HintPriority &&
+                !(5 in factors && it in FIVE_BASED_HINT_TARGETS)
+        }
+        .distinct()
+        .sortedBy { HintPriority.indexOf(it) }
+    val fiveComplement = fiveComplementHintLines(firstNumber, secondNumber)
+    if (eligibleTargets.isEmpty() && fiveComplement == null) return null
+
+    val approaches = buildList {
+        addAll(eligibleTargets.map { target ->
+            val x = factors.firstOrNull { it != target } ?: target
+            hintLinesForTarget(target, x)
+        })
+        fiveComplement?.let(::add)
+    }
+    return approaches.flatMapIndexed { index, linesForApproach ->
+        buildList {
+            if (index > 0) {
+                add("")
+                add(HINT_SEPARATOR)
+                add("")
+            }
+            addAll(linesForApproach)
+        }
+    }
+}
+
+private fun fiveComplementHintLines(first: Int, second: Int): List<String>? {
+    if (first != 5 && second != 5) return null
+    val other = if (first == 5) second else first
+    val complement = when (other) {
+        3 -> 2
+        5 -> 4
+        7 -> 6
+        9 -> 8
+        else -> return null
+    }
+    val firstResult = complement * 5
+    val answer = firstResult + 5
+    val width = maxOf(complement, 5, firstResult, answer).digits()
+    fun n(value: Int) = value.toString().padStart(width, ' ')
+    return listOf(
+        "${n(complement)} × ${n(5)} = ${n(firstResult)}",
+        "${n(firstResult)} + ${n(5)} = ${n(answer)}",
+    )
+}
+
+private fun hintLinesForTarget(target: Int, x: Int): List<String> {
+    val fiveTimes = 5 * x
+    val tenTimes = 10 * x
+    val answer = target * x
+    val width = when (target) {
+        2 -> maxOf(x, 2 * x).digits()
+        3 -> maxOf(x, 3 * x).digits()
+        4, 6, 7 -> maxOf(x, fiveTimes, answer).digits()
+        8, 9 -> maxOf(x, tenTimes, answer).digits()
+        else -> return emptyList()
+    }
+    fun n(value: Int) = value.toString().padStart(width, ' ')
+    fun blank() = "_".repeat(width)
+
+    return when (target) {
+        2 -> listOf("${n(x)} + ${n(x)} = ${blank()}")
+        3 -> listOf("${n(x)} + ${n(x)} + ${n(x)} = ${blank()}")
+        4 -> listOf(
+            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "${n(fiveTimes)} - ${n(x)} = ${blank()}",
+        )
+        6 -> listOf(
+            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "${n(fiveTimes)} + ${n(x)} = ${blank()}",
+        )
+        7 -> listOf(
+            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "${n(fiveTimes)} + ${n(x)} + ${n(x)} = ${blank()}",
+        )
+        8 -> listOf(
+            "10 × ${n(x)} = ${n(tenTimes)}",
+            "${n(tenTimes)} - ${n(x)} - ${n(x)} = ${blank()}",
+        )
+        9 -> listOf(
+            "10 × ${n(x)} = ${n(tenTimes)}",
+            "${n(tenTimes)} - ${n(x)} = ${blank()}",
+        )
+        else -> emptyList()
+    }
+}
+
+private fun Int.digits(): Int = toString().length
 
 /** Pure practice-row generation, kept free of Android APIs so it is easy to test. */
 object PracticeEngine {

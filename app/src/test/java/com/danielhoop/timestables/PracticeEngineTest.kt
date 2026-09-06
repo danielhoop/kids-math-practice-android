@@ -159,6 +159,82 @@ class PracticeEngineTest {
     }
 
     @Test
+    fun hintsAreOnlyAvailableForMultiplicationTablesTwoThroughNine() {
+        assertTrue(Calculation(MathOperator.MULTIPLY, 2, 6, false).hintLines() != null)
+        assertTrue(Calculation(MathOperator.MULTIPLY, 9, 6, false).hintLines() != null)
+        assertEquals(null, Calculation(MathOperator.MULTIPLY, 1, 10, false).hintLines())
+        assertEquals(null, Calculation(MathOperator.DIVIDE, 3, 6, false).hintLines())
+    }
+
+    @Test
+    fun fourTableHintUsesFiveTimesThenSubtracts() {
+        val lines = Calculation(MathOperator.MULTIPLY, 4, 10, false).hintLines()
+
+        assertEquals(listOf("5 × 10 = 50", "50 - 10 = __"), lines?.take(2))
+    }
+
+    @Test
+    fun eitherMultiplicationFactorCanQualifyForAHint() {
+        val lines = Calculation(MathOperator.MULTIPLY, 5, 4, false).hintLines()
+
+        assertEquals(null, lines)
+    }
+
+    @Test
+    fun fiveSuppressesHintsThatAlreadyStartWithFiveTimes() {
+        assertEquals(null, Calculation(MathOperator.MULTIPLY, 5, 6, false).hintLines())
+        assertEquals(null, Calculation(MathOperator.MULTIPLY, 8, 5, false).hintLines())
+        assertTrue(Calculation(MathOperator.MULTIPLY, 5, 2, false).hintLines() != null)
+        assertTrue(Calculation(MathOperator.MULTIPLY, 5, 9, false).hintLines() != null)
+    }
+
+    @Test
+    fun fiveComplementHintsAreAppendedAsLastPriority() {
+        assertEquals(
+            listOf(
+                " 5 +  5 +  5 = __",
+                "",
+                "----------------",
+                "",
+                " 2 ×  5 = 10",
+                "10 +  5 = 15",
+            ),
+            Calculation(MathOperator.MULTIPLY, 5, 3, false).hintLines(),
+        )
+        assertEquals(
+            listOf(" 4 ×  5 = 20", "20 +  5 = 25"),
+            Calculation(MathOperator.MULTIPLY, 5, 5, false).hintLines(),
+        )
+        assertEquals(
+            listOf(" 6 ×  5 = 30", "30 +  5 = 35"),
+            Calculation(MathOperator.MULTIPLY, 7, 5, false).hintLines(),
+        )
+        assertEquals(
+            listOf(
+                "10 ×  5 = 50",
+                "50 -  5 = __",
+                "",
+                "----------------",
+                "",
+                " 8 ×  5 = 40",
+                "40 +  5 = 45",
+            ),
+            Calculation(MathOperator.MULTIPLY, 9, 5, false).hintLines(),
+        )
+    }
+
+    @Test
+    fun multipleHintsUseTheRequestedPriorityAndSeparator() {
+        val lines = Calculation(MathOperator.MULTIPLY, 2, 6, false).hintLines()
+
+        assertEquals(" 6 +  6 = __", lines?.first())
+        assertEquals("", lines?.get(1))
+        assertEquals("----------------", lines?.get(2))
+        assertEquals("", lines?.get(3))
+        assertEquals("5 ×  2 = 10", lines?.get(4))
+    }
+
+    @Test
     fun recycledNumbersNeverAppearNextToThemselves() {
         repeat(50) { seed ->
             val firstRound = PracticeEngine.firstRoundNumbers(
