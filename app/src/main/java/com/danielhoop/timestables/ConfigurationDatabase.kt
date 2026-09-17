@@ -40,6 +40,8 @@ class ConfigurationDatabase(context: Context) :
         createScoreTable(database)
         createTimerSettingsTable(database)
         createTimerHistoryTable(database)
+        createSettingsTable(database)
+        createNumberAvailabilityTable(database)
     }
 
     override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -47,6 +49,8 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 3) createTimerSettingsTable(database)
         if (oldVersion < 4) createTimerHistoryTable(database)
         if (oldVersion < 6) addOrderedNumbersColumn(database)
+        if (oldVersion < 7) createSettingsTable(database)
+        if (oldVersion < 7) createNumberAvailabilityTable(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -135,6 +139,74 @@ class ConfigurationDatabase(context: Context) :
             while (cursor.moveToNext()) {
                 put(cursor.getInt(firstNumberColumn), cursor.getInt(errorCountColumn))
             }
+        }
+    }
+
+    fun saveSettingsPin(pin: String) {
+        val values = ContentValues().apply {
+            put(COLUMN_SETTINGS_ID, SETTINGS_ROW_ID)
+            put(COLUMN_SETTINGS_PIN, pin)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadSettingsPin(): String? = readableDatabase.query(
+        TABLE_SETTINGS,
+        arrayOf(COLUMN_SETTINGS_PIN),
+        "$COLUMN_SETTINGS_ID = ?",
+        arrayOf(SETTINGS_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SETTINGS_PIN)) else null
+    }
+
+    fun loadAvailableNumbers(operator: MathOperator): Set<Int> = readableDatabase.query(
+        TABLE_NUMBER_AVAILABILITY,
+        arrayOf(COLUMN_NUMBER, COLUMN_ENABLED),
+        "$COLUMN_OPERATOR = ?",
+        arrayOf(operator.name),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        val available = mutableSetOf<Int>()
+        val numberColumn = cursor.getColumnIndexOrThrow(COLUMN_NUMBER)
+        val enabledColumn = cursor.getColumnIndexOrThrow(COLUMN_ENABLED)
+        var hasSavedRows = false
+        while (cursor.moveToNext()) {
+            hasSavedRows = true
+            if (cursor.getInt(enabledColumn) != 0) available += cursor.getInt(numberColumn)
+        }
+        if (hasSavedRows) available else (1..12).toSet()
+    }
+
+    fun saveAvailableNumbers(operator: MathOperator, numbers: Set<Int>) {
+        val database = writableDatabase
+        database.beginTransaction()
+        try {
+            (1..12).forEach { number ->
+                val values = ContentValues().apply {
+                    put(COLUMN_OPERATOR, operator.name)
+                    put(COLUMN_NUMBER, number)
+                    put(COLUMN_ENABLED, number in numbers)
+                }
+                database.insertWithOnConflict(
+                    TABLE_NUMBER_AVAILABILITY,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
         }
     }
 
@@ -271,13 +343,39 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    private fun createNumberAvailabilityTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_NUMBER_AVAILABILITY (
+                $COLUMN_OPERATOR TEXT NOT NULL,
+                $COLUMN_NUMBER INTEGER NOT NULL,
+                $COLUMN_ENABLED INTEGER NOT NULL,
+                PRIMARY KEY ($COLUMN_OPERATOR, $COLUMN_NUMBER)
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createSettingsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_SETTINGS (
+                $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY,
+                $COLUMN_SETTINGS_PIN TEXT NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 6
+        const val DATABASE_VERSION = 7
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
         const val TABLE_TIMER_HISTORY = "timer_history"
+        const val TABLE_SETTINGS = "settings"
+        const val TABLE_NUMBER_AVAILABILITY = "number_availability"
         const val COLUMN_OPERATOR = "operator"
         const val COLUMN_HIGHEST_NUMBER = "highest_number"
         const val COLUMN_RANDOM_FIRST_SECOND = "random_first_second"
@@ -294,5 +392,10 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_DURATION_MINUTES = "duration_minutes"
         const val COLUMN_CORRECT_CALCULATIONS = "correct_calculations"
         const val COLUMN_NUMBER_OF_CALCULATIONS = "number_of_calculations"
+        const val COLUMN_SETTINGS_ID = "id"
+        const val COLUMN_SETTINGS_PIN = "pin"
+        const val COLUMN_NUMBER = "number"
+        const val COLUMN_ENABLED = "enabled"
+        const val SETTINGS_ROW_ID = 1
     }
 }

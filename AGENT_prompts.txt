@@ -354,3 +354,20 @@ For the following calculations add extra rules (as last priority):
 
 -------------------------
 The app switches in some kind of a dark mode. Then, some font is white. Inhibit this behavior. It should always look the same (at least for the time being).
+
+
+-------------------------
+> On the start screen, create a settings button with a gear icon below the timer button. This will first ask for a pin
+  and ask to repeat the pin twice. Only when it's given twice, the same pin, the user is allowed to proceed. In this
+  settings menu, add one section for multiplication and list all numbers from 1 to 12 with check marks or switches. So
+  the user can specify by activating or deactivating these, which numbers are available for multiplication. So this is
+  kind of a parental control. If a number is not activated, make the number gray in the normal times table selection
+  screen and deactivate that button. So the user, in that case the child, cannot choose this number for exercise.
+
+  As default, all numbers are activated. Store it in the SQLite database.
+  And do the exact same for the division.
+  
+› I forgot: This PIN has to be given twice when there is yet no PIN in the database. On first time, we store the PIN to
+  the DB. On subsequent visits to the settings page, we ask for the PIN that is stored in the database. If it is not
+  correct, the user cannot enter. Do not add any brute force prevention mechanism.
+  The field to enter the PIN must hide the given input.

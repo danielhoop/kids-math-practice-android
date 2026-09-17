@@ -14,7 +14,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class AppScreen { OPERATOR, SETUP, PRACTICE, RESULTS }
+enum class AppScreen { OPERATOR, SETUP, PRACTICE, RESULTS, SETTINGS }
 
 class PracticeViewModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(AppScreen.OPERATOR)
@@ -67,6 +67,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var errorCount by mutableIntStateOf(0)
         private set
+    var settingsPin by mutableStateOf<String?>(null)
+        private set
+    var settingsPinLoaded by mutableStateOf(false)
+        private set
+    var multiplicationNumbers by mutableStateOf((1..12).toSet())
+        private set
+    var divisionNumbers by mutableStateOf((1..12).toSet())
+        private set
 
     private var highestNumber = 10
     private var firstNumber = 1
@@ -87,6 +95,19 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private var timedCorrectCalculations = 0
 
     init {
+        viewModelScope.launch {
+            val (pin, multiplication, division) = withContext(Dispatchers.IO) {
+                Triple(
+                    configurationDatabase.loadSettingsPin(),
+                    configurationDatabase.loadAvailableNumbers(MathOperator.MULTIPLY),
+                    configurationDatabase.loadAvailableNumbers(MathOperator.DIVIDE),
+                )
+            }
+            settingsPin = pin
+            multiplicationNumbers = multiplication
+            divisionNumbers = division
+            settingsPinLoaded = true
+        }
         timerPreferenceLoadJob = viewModelScope.launch {
             val savedMinutes = withContext(Dispatchers.IO) {
                 configurationDatabase.loadTimerMinutes()
@@ -107,6 +128,31 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         scoresByFirstNumber = emptyMap()
         screen = AppScreen.SETUP
         loadConfiguration(value)
+    }
+
+    fun openSettings() {
+        screen = AppScreen.SETTINGS
+    }
+
+    fun saveSettingsPin(pin: String) {
+        settingsPin = pin
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveSettingsPin(pin)
+        }
+    }
+
+    fun numberIsAvailable(operator: MathOperator, number: Int): Boolean =
+        number in if (operator == MathOperator.MULTIPLY) multiplicationNumbers else divisionNumbers
+
+    fun updateNumberAvailability(operator: MathOperator, number: Int, enabled: Boolean) {
+        val updated = (if (operator == MathOperator.MULTIPLY) multiplicationNumbers else divisionNumbers)
+            .toMutableSet()
+            .apply { if (enabled) add(number) else remove(number) }
+            .toSet()
+        if (operator == MathOperator.MULTIPLY) multiplicationNumbers = updated else divisionNumbers = updated
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveAvailableNumbers(operator, updated)
+        }
     }
 
     fun updateHighestNumber(value: String) {
@@ -271,6 +317,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             AppScreen.OPERATOR -> Unit
             AppScreen.SETUP -> screen = AppScreen.OPERATOR
             AppScreen.PRACTICE, AppScreen.RESULTS -> screen = AppScreen.SETUP
+            AppScreen.SETTINGS -> screen = AppScreen.OPERATOR
         }
     }
 

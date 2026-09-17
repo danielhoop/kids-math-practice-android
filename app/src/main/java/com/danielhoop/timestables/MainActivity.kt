@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -119,6 +120,7 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
         AppScreen.SETUP -> SetupScreen(model)
         AppScreen.PRACTICE -> PracticeScreen(model)
         AppScreen.RESULTS -> ResultsScreen(model.errorCount, model::returnToSetup)
+        AppScreen.SETTINGS -> SettingsScreen(model)
     }
 }
 
@@ -126,6 +128,10 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
 private fun OperatorScreen(model: PracticeViewModel) {
     var showTimerDialog by remember { mutableStateOf(false) }
     var showTimerHistoryDialog by remember { mutableStateOf(false) }
+    var showSettingsPinDialog by remember { mutableStateOf(false) }
+    var pinText by remember(showSettingsPinDialog) { mutableStateOf("") }
+    var repeatPinText by remember(showSettingsPinDialog) { mutableStateOf("") }
+    var pinError by remember(showSettingsPinDialog) { mutableStateOf<String?>(null) }
     var minutesText by remember(showTimerDialog, model.timerMinutes) {
         mutableStateOf(model.timerMinutes.toString())
     }
@@ -142,6 +148,66 @@ private fun OperatorScreen(model: PracticeViewModel) {
         Button(onClick = { showTimerDialog = true }) {
             Text("⏱  Timer", fontSize = 21.sp)
         }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { showSettingsPinDialog = true },
+            enabled = model.settingsPinLoaded,
+        ) {
+            Text("\u2699  Settings", fontSize = 21.sp)
+        }
+    }
+
+    if (showSettingsPinDialog) {
+        val creatingPin = model.settingsPin == null
+        AlertDialog(
+            onDismissRequest = { showSettingsPinDialog = false },
+            containerColor = DefaultGray,
+            title = { Text(if (creatingPin) "Create settings PIN" else "Settings PIN") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = pinText,
+                        onValueChange = { value ->
+                            if (value.all(Char::isDigit)) pinText = value
+                            pinError = null
+                        },
+                        label = { Text(if (creatingPin) "PIN" else "Enter PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                    )
+                    if (creatingPin) {
+                        OutlinedTextField(
+                            value = repeatPinText,
+                            onValueChange = { value ->
+                                if (value.all(Char::isDigit)) repeatPinText = value
+                                pinError = null
+                            },
+                            label = { Text("Repeat PIN") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                        )
+                    }
+                    pinError?.let { Text(it, color = Color(0xFF9B2226)) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    when {
+                        pinText.isEmpty() -> pinError = "Enter a PIN"
+                        creatingPin && pinText != repeatPinText -> pinError = "The PINs do not match"
+                        !creatingPin && pinText != model.settingsPin -> pinError = "Incorrect PIN"
+                        else -> {
+                            if (creatingPin) model.saveSettingsPin(pinText)
+                            showSettingsPinDialog = false
+                            model.openSettings()
+                        }
+                    }
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { showSettingsPinDialog = false }) { Text("Cancel") } },
+        )
     }
 
     if (showTimerDialog) {
@@ -305,11 +371,16 @@ private fun SetupScreen(model: PracticeViewModel) {
                 (1..12).forEach { number ->
                     Button(
                         onClick = { model.startPractice(number) },
+                        enabled = model.numberIsAvailable(model.operator, number),
                         modifier = Modifier
                             .weight(1f)
                             .height(58.dp),
                         shape = RoundedCornerShape(16.dp),
                         contentPadding = PaddingValues(7.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            disabledContainerColor = Color(0xFF9E9E9E),
+                            disabledContentColor = Color(0xFF616161),
+                        ),
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             Text(
@@ -417,6 +488,56 @@ private fun SetupScreen(model: PracticeViewModel) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsScreen(model: PracticeViewModel) {
+    Scaffold(
+        containerColor = DefaultGray,
+        topBar = { BackBar(model::goBack) },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text("Parental settings", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(20.dp))
+            Text("Multiplication", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            (1..12).forEach { number ->
+                SettingsNumberRow(
+                    number = number,
+                    enabled = number in model.multiplicationNumbers,
+                    onEnabledChange = { model.updateNumberAvailability(MathOperator.MULTIPLY, number, it) },
+                )
+            }
+            Spacer(Modifier.height(24.dp))
+            Text("Division", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            (1..12).forEach { number ->
+                SettingsNumberRow(
+                    number = number,
+                    enabled = number in model.divisionNumbers,
+                    onEnabledChange = { model.updateNumberAvailability(MathOperator.DIVIDE, number, it) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsNumberRow(number: Int, enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(number.toString(), fontSize = 19.sp)
+        Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
 }
 
