@@ -371,3 +371,124 @@ The app switches in some kind of a dark mode. Then, some font is white. Inhibit 
   the DB. On subsequent visits to the settings page, we ask for the PIN that is stored in the database. If it is not
   correct, the user cannot enter. Do not add any brute force prevention mechanism.
   The field to enter the PIN must hide the given input.
+
+-------------------------
+Suggest help/tips for the division case, but don't implement it yet. Can we apply similar logic like in the multipliation case?
+
+-------------------------
+
+› I don't like the decomposition.
+  OK, first of all, show the inverse relationship.
+
+  But for the other cases do the same as in the multiplication tips:
+  For the exercise:
+  27 / 3 =
+  Show:
+  30 /  3 = 10
+  10 -  1 = __
+
+  For the exercise:
+  24 / 3 =
+  Show:
+  30 /  3 = 10
+  10 - 1 - 1 = __
+
+  And all the other hints that we use for the multiplication case but with this slight adaption.
+  Like for the extercise:
+  18 / 3 =
+  Show:
+  15 /  3 =  5
+   5 +  1 = __
+
+  For the exercise:
+  12 / 3
+  Show:
+  15 /  3 =  5
+   5 -  1 = __
+
+  Got the idea? If so, show me all approaches you would use for the different cases using the "times
+  3" row. What, if the result would be 2, 3, 4, 6, 7, 8, 9 ?
+
+› OK. But only use that rules for results 4, 6, 7, 8, 9.
+  For 2 and 3 that is not a real help.
+  Apply it: First, always inverse multiplication hint. Then the rule shown above for results 4, 6, 7,
+  8, 9.
+
+-------------------------
+› In the parental control settings, add the possibility to suppress these hints separately for the
+  multiplication or for the division case. I thouls be the first switch at the top of the block(s),
+  before the number 1. The setting should be called: "Show hints". Default is activated.
+
+-------------------------  
+› When entering the parental control settings, place the cursor in the "Enter PIN" input field as
+  default. Otherwise the user first has to do that manually.
+> If the PIN matches, then auto enter the configuration screen, that is, after each key pressed, compare the input with the right PIN and if it matches, move forward without the user to press the OK button.
+
+-------------------------
+Create a new main calculation mode. It's a mixture between multiplication and division. To enter into this mode, on the main entry screen, add a new button with the two signs "Multiplication" and "Division" in one button.
+The rest functions the same as in multiplication or division mode: The user can choose from 1 to 12. Then, the app starts a sample of calculations. But in this mode, multiplication and division exercises are sampled randomly. Try to use a set of 10 calculations in the first half of the set. That should be easy without duplications, even if we exclude 1 and 10, because we have a lot to choose from either multiplication or division.
+Add also a parental control to specify which base number is not allowed to be chosen by the user.
+
+-------------------------
+As the last number after "12" add a new button "?" for a new mode within the multiplication/division/mixed mode. This will sample calculations from all possible numbers (not forbidden by parental control, and without 1 and 10 if disabled). Here again, sample 10 numbers in the first half of the set because we have enough to sample from. But prevent an app crash if the parent has fobidden too many numbers. Do everything else the same way as usual.
+
+-------------------------
+In the wildcard mode, if the use has not made any error in the first half set, create a completely new second half set.
+
+-------------------------
+On the home screen, add another calculation mode: Additoin "+".
+Here, there are no base numbers to choose from. The user can control the sample creation differently:
+Highest input: Integer input
+Highest result: Integer input
+Auto enter: Switch (default false)
+Start button
+
+When pressing the button, apply validation and report to the user: Either choose "Highest input" or "Highest result" but not both at the same time.
+Store the user settings into the database so when the user returns, the settings from last time are loaded.
+
+In addition mode, run 20 sample calculations and do not repeat errors. But show errors to the user and request the user to give the correct result in the modal in order to proceed. The same way as is done int he existing modes.
+
+-------------------------
+Add a parental control setting for the addition case. Name it "Minimum result". Then, when the user/child wants to choose a "Highest result" smaller than "Minimum result", tell the user in the validation: "Highest result" must be at least ...
+
+-------------------------
+Add a subtraction mode equivalent to the addition mode. I.e., add a "-" button at the home screen. The user can configure:
+Highest input: Integer input
+Lowest result: Integer input
+Auto enter: Switch (default false)
+Start button
+
+In this mode, the user can specify both, highest input and lowest result. But validate that lowest result is smaller than highest input.
+
+-------------------------
+Add parental control for subtraction:
+Minimum input
+Maximum result
+"Highest input" must be larger equal "Minimum input". Default: Not set, therefore "Higest input" is allowed to be any number.
+"Lowest result" must be lower equal "Maximum result". Default: Not set, therefore "Lowest result" is allowed to be any number.
+
+-------------------------
+› Reorder the calculation signs on the start screen.
+  First row, centered: +, -
+  Secont row, centered: x, /
+  Third row, centered: x/ (combined)
+
+-------------------------
+› The sampling algorithm for addition (and probably for subtraction too) seems to be inefficient. It takes a long time when I enter "1000" as the maximum result number. Identify the inefficiency root cause and improve the sampling algorithm accordingly.
+
+-------------------------
+› Think about the following sampling method:
+  For each pair: Sample from 0 to max input, and take the sampled integer as the first number for the calculation.
+  Then sample again from 1 to (max input - number1), and take the sampled integer as the second number for the
+  calculation.
+  If the pair is already contained in the sample of pairs for this round, then sample again. Else, continue to the next pair.
+  Like this, we have a O(n) sampling time complexity. You can then remove the restriction on 1000 as being the max number for the "Highest result" setting.
+
+-------------------------
+› I am stuck in a addition test run.
+  I set Highest result to 10.
+  I am at number 9/20.
+  The calculation is 7 + 2.
+  I cannot enter the number 9. It will just not show up in the result input field.
+  I was able to enter the number 1.
+  Identify the bug cause and fix it.

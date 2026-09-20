@@ -21,6 +21,21 @@ data class TimerHistoryEntry(
     val numberOfCalculations: Int,
 )
 
+data class AdditionConfiguration(
+    val highestInput: Int?,
+    val highestResult: Int?,
+    val autoEnter: Boolean,
+    val minimumResult: Int,
+)
+
+data class SubtractionConfiguration(
+    val highestInput: Int?,
+    val lowestResult: Int?,
+    val autoEnter: Boolean,
+    val minimumInput: Int?,
+    val maximumResult: Int?,
+)
+
 class ConfigurationDatabase(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -42,6 +57,9 @@ class ConfigurationDatabase(context: Context) :
         createTimerHistoryTable(database)
         createSettingsTable(database)
         createNumberAvailabilityTable(database)
+        createOperatorSettingsTable(database)
+        createAdditionConfigurationTable(database)
+        createSubtractionConfigurationTable(database)
     }
 
     override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -51,6 +69,11 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 6) addOrderedNumbersColumn(database)
         if (oldVersion < 7) createSettingsTable(database)
         if (oldVersion < 7) createNumberAvailabilityTable(database)
+        if (oldVersion < 8) createOperatorSettingsTable(database)
+        if (oldVersion < 9) createAdditionConfigurationTable(database)
+        if (oldVersion < 10) addMinimumResultColumn(database)
+        if (oldVersion < 11) createSubtractionConfigurationTable(database)
+        if (oldVersion < 12) migrateSubtractionRestrictions(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -210,6 +233,115 @@ class ConfigurationDatabase(context: Context) :
         }
     }
 
+    fun loadShowHints(operator: MathOperator): Boolean = readableDatabase.query(
+        TABLE_OPERATOR_SETTINGS,
+        arrayOf(COLUMN_SHOW_HINTS),
+        "$COLUMN_OPERATOR = ?",
+        arrayOf(operator.name),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst()) cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_SHOW_HINTS)) != 0 else true
+    }
+
+    fun saveShowHints(operator: MathOperator, showHints: Boolean) {
+        val values = ContentValues().apply {
+            put(COLUMN_OPERATOR, operator.name)
+            put(COLUMN_SHOW_HINTS, showHints)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_OPERATOR_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun saveAdditionConfiguration(configuration: AdditionConfiguration) {
+        val values = ContentValues().apply {
+            put(COLUMN_ADDITION_ID, ADDITION_ROW_ID)
+            configuration.highestInput?.let { put(COLUMN_HIGHEST_INPUT, it) } ?: putNull(COLUMN_HIGHEST_INPUT)
+            configuration.highestResult?.let { put(COLUMN_HIGHEST_RESULT, it) } ?: putNull(COLUMN_HIGHEST_RESULT)
+            put(COLUMN_AUTO_ENTER, configuration.autoEnter)
+            put(COLUMN_MINIMUM_RESULT, configuration.minimumResult)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_ADDITION_CONFIGURATION,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadAdditionConfiguration(): AdditionConfiguration? = readableDatabase.query(
+        TABLE_ADDITION_CONFIGURATION,
+        arrayOf(COLUMN_HIGHEST_INPUT, COLUMN_HIGHEST_RESULT, COLUMN_AUTO_ENTER, COLUMN_MINIMUM_RESULT),
+        "$COLUMN_ADDITION_ID = ?",
+        arrayOf(ADDITION_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        val inputColumn = cursor.getColumnIndexOrThrow(COLUMN_HIGHEST_INPUT)
+        val resultColumn = cursor.getColumnIndexOrThrow(COLUMN_HIGHEST_RESULT)
+        AdditionConfiguration(
+            highestInput = if (cursor.isNull(inputColumn)) null else cursor.getInt(inputColumn),
+            highestResult = if (cursor.isNull(resultColumn)) null else cursor.getInt(resultColumn),
+            autoEnter = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_AUTO_ENTER)) != 0,
+            minimumResult = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_MINIMUM_RESULT)),
+        )
+    }
+
+    fun saveSubtractionConfiguration(configuration: SubtractionConfiguration) {
+        val values = ContentValues().apply {
+            put(COLUMN_SUBTRACTION_ID, SUBTRACTION_ROW_ID)
+            configuration.highestInput?.let { put(COLUMN_HIGHEST_INPUT, it) } ?: putNull(COLUMN_HIGHEST_INPUT)
+            configuration.lowestResult?.let { put(COLUMN_LOWEST_RESULT, it) } ?: putNull(COLUMN_LOWEST_RESULT)
+            put(COLUMN_AUTO_ENTER, configuration.autoEnter)
+            configuration.minimumInput?.let { put(COLUMN_SUBTRACTION_MINIMUM_INPUT, it) }
+                ?: putNull(COLUMN_SUBTRACTION_MINIMUM_INPUT)
+            configuration.maximumResult?.let { put(COLUMN_SUBTRACTION_MAXIMUM_RESULT, it) }
+                ?: putNull(COLUMN_SUBTRACTION_MAXIMUM_RESULT)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_SUBTRACTION_CONFIGURATION,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadSubtractionConfiguration(): SubtractionConfiguration? = readableDatabase.query(
+        TABLE_SUBTRACTION_CONFIGURATION,
+        arrayOf(
+            COLUMN_HIGHEST_INPUT,
+            COLUMN_LOWEST_RESULT,
+            COLUMN_AUTO_ENTER,
+            COLUMN_SUBTRACTION_MINIMUM_INPUT,
+            COLUMN_SUBTRACTION_MAXIMUM_RESULT,
+        ),
+        "$COLUMN_SUBTRACTION_ID = ?",
+        arrayOf(SUBTRACTION_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        val inputColumn = cursor.getColumnIndexOrThrow(COLUMN_HIGHEST_INPUT)
+        val resultColumn = cursor.getColumnIndexOrThrow(COLUMN_LOWEST_RESULT)
+        val minimumColumn = cursor.getColumnIndexOrThrow(COLUMN_SUBTRACTION_MINIMUM_INPUT)
+        val maximumColumn = cursor.getColumnIndexOrThrow(COLUMN_SUBTRACTION_MAXIMUM_RESULT)
+        SubtractionConfiguration(
+            highestInput = if (cursor.isNull(inputColumn)) null else cursor.getInt(inputColumn),
+            lowestResult = if (cursor.isNull(resultColumn)) null else cursor.getInt(resultColumn),
+            autoEnter = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_AUTO_ENTER)) != 0,
+            minimumInput = if (cursor.isNull(minimumColumn)) null else cursor.getInt(minimumColumn),
+            maximumResult = if (cursor.isNull(maximumColumn)) null else cursor.getInt(maximumColumn),
+        )
+    }
+
     fun saveTimerMinutes(minutes: Int) {
         val values = ContentValues().apply {
             put(COLUMN_TIMER_ID, TIMER_ROW_ID)
@@ -367,15 +499,90 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    private fun createOperatorSettingsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_OPERATOR_SETTINGS (
+                $COLUMN_OPERATOR TEXT PRIMARY KEY,
+                $COLUMN_SHOW_HINTS INTEGER NOT NULL DEFAULT 1
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createAdditionConfigurationTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_ADDITION_CONFIGURATION (
+                $COLUMN_ADDITION_ID INTEGER PRIMARY KEY,
+                $COLUMN_HIGHEST_INPUT INTEGER,
+                $COLUMN_HIGHEST_RESULT INTEGER,
+                $COLUMN_AUTO_ENTER INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_MINIMUM_RESULT INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun addMinimumResultColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_ADDITION_CONFIGURATION, COLUMN_MINIMUM_RESULT)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_ADDITION_CONFIGURATION ADD COLUMN " +
+                    "$COLUMN_MINIMUM_RESULT INTEGER NOT NULL DEFAULT 0",
+            )
+        }
+    }
+
+    private fun createSubtractionConfigurationTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_SUBTRACTION_CONFIGURATION (
+                $COLUMN_SUBTRACTION_ID INTEGER PRIMARY KEY,
+                $COLUMN_HIGHEST_INPUT INTEGER,
+                $COLUMN_LOWEST_RESULT INTEGER,
+                $COLUMN_AUTO_ENTER INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_SUBTRACTION_MINIMUM_INPUT INTEGER,
+                $COLUMN_SUBTRACTION_MAXIMUM_RESULT INTEGER
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun migrateSubtractionRestrictions(database: SQLiteDatabase) {
+        if (hasColumn(database, TABLE_SUBTRACTION_CONFIGURATION, COLUMN_SUBTRACTION_MINIMUM_RESULT) &&
+            !hasColumn(database, TABLE_SUBTRACTION_CONFIGURATION, COLUMN_SUBTRACTION_MINIMUM_INPUT)
+        ) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_SUBTRACTION_CONFIGURATION RENAME COLUMN " +
+                    "$COLUMN_SUBTRACTION_MINIMUM_RESULT TO $COLUMN_SUBTRACTION_MINIMUM_INPUT",
+            )
+        }
+        if (!hasColumn(database, TABLE_SUBTRACTION_CONFIGURATION, COLUMN_SUBTRACTION_MINIMUM_INPUT)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_SUBTRACTION_CONFIGURATION ADD COLUMN " +
+                    "$COLUMN_SUBTRACTION_MINIMUM_INPUT INTEGER",
+            )
+        }
+        if (!hasColumn(database, TABLE_SUBTRACTION_CONFIGURATION, COLUMN_SUBTRACTION_MAXIMUM_RESULT)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_SUBTRACTION_CONFIGURATION ADD COLUMN " +
+                    "$COLUMN_SUBTRACTION_MAXIMUM_RESULT INTEGER",
+            )
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 7
+        const val DATABASE_VERSION = 12
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
         const val TABLE_TIMER_HISTORY = "timer_history"
         const val TABLE_SETTINGS = "settings"
         const val TABLE_NUMBER_AVAILABILITY = "number_availability"
+        const val TABLE_OPERATOR_SETTINGS = "operator_settings"
+        const val TABLE_ADDITION_CONFIGURATION = "addition_configuration"
+        const val TABLE_SUBTRACTION_CONFIGURATION = "subtraction_configuration"
         const val COLUMN_OPERATOR = "operator"
         const val COLUMN_HIGHEST_NUMBER = "highest_number"
         const val COLUMN_RANDOM_FIRST_SECOND = "random_first_second"
@@ -396,6 +603,18 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_SETTINGS_PIN = "pin"
         const val COLUMN_NUMBER = "number"
         const val COLUMN_ENABLED = "enabled"
+        const val COLUMN_SHOW_HINTS = "show_hints"
+        const val COLUMN_ADDITION_ID = "id"
+        const val COLUMN_HIGHEST_INPUT = "highest_input"
+        const val COLUMN_HIGHEST_RESULT = "highest_result"
+        const val COLUMN_MINIMUM_RESULT = "minimum_result"
+        const val COLUMN_SUBTRACTION_ID = "id"
+        const val COLUMN_LOWEST_RESULT = "lowest_result"
+        const val COLUMN_SUBTRACTION_MINIMUM_RESULT = "subtraction_minimum_result"
+        const val COLUMN_SUBTRACTION_MINIMUM_INPUT = "subtraction_minimum_input"
+        const val COLUMN_SUBTRACTION_MAXIMUM_RESULT = "subtraction_maximum_result"
+        const val SUBTRACTION_ROW_ID = 1
+        const val ADDITION_ROW_ID = 1
         const val SETTINGS_ROW_ID = 1
     }
 }

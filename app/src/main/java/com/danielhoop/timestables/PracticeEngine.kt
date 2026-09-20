@@ -10,8 +10,11 @@ private val FIVE_BASED_HINT_TARGETS = setOf(4, 6, 7, 8)
 private val HintPriority = listOf(2, 6, 4, 9, 7, 3, 8)
 
 enum class MathOperator(val symbol: String) {
+    ADDITION("+"),
+    SUBTRACTION("-"),
     MULTIPLY("×"),
     DIVIDE("÷"),
+    MIXED("×÷"),
 }
 
 data class Calculation(
@@ -20,31 +23,41 @@ data class Calculation(
     val secondNumber: Int,
     /** Controls visual order for multiplication. It is always false for division. */
     val swapRoles: Boolean,
+    /** The concrete operation used by a calculation in mixed mode. */
+    val calculationOperator: MathOperator = operator,
 ) {
     val expectedAnswer: Int
-        get() = when (operator) {
+        get() = when (calculationOperator) {
+            MathOperator.ADDITION -> firstNumber + secondNumber
+            MathOperator.SUBTRACTION -> firstNumber - secondNumber
             MathOperator.MULTIPLY -> firstNumber * secondNumber
             MathOperator.DIVIDE -> secondNumber
+            MathOperator.MIXED -> error("Mixed mode requires a concrete calculation operator")
         }
 
     val expression: String
-        get() = when (operator) {
+        get() = when (calculationOperator) {
+            MathOperator.ADDITION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
+            MathOperator.SUBTRACTION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
             MathOperator.MULTIPLY -> {
                 val left = if (swapRoles) firstNumber else secondNumber
                 val right = if (swapRoles) secondNumber else firstNumber
-                "$left ${operator.symbol} $right"
+                "$left ${calculationOperator.symbol} $right"
             }
 
             MathOperator.DIVIDE -> {
                 val product = firstNumber * secondNumber
-                "$product ${operator.symbol} $firstNumber"
+                "$product ${calculationOperator.symbol} $firstNumber"
             }
+
+            MathOperator.MIXED -> error("Mixed mode requires a concrete calculation operator")
         }
 }
 
 /** Returns the optional, monospaced arithmetic hint for a multiplication table. */
 fun Calculation.hintLines(): List<String>? {
-    if (operator != MathOperator.MULTIPLY) return null
+    if (calculationOperator == MathOperator.DIVIDE) return divisionHintLines()
+    if (calculationOperator != MathOperator.MULTIPLY) return null
     val factors = listOf(firstNumber, secondNumber)
     val eligibleTargets = factors
         .filter {
@@ -73,6 +86,41 @@ fun Calculation.hintLines(): List<String>? {
             addAll(linesForApproach)
         }
     }
+}
+
+private fun Calculation.divisionHintLines(): List<String> {
+    val divisor = firstNumber
+    val dividend = firstNumber * secondNumber
+    val result = secondNumber
+    val anchor = when (result) {
+        4, 6, 7 -> 5
+        8, 9 -> 10
+        else -> null
+    }
+    val width = maxOf(divisor, dividend, result, anchor ?: 0).digits()
+    fun n(value: Int) = value.toString().padStart(width, ' ')
+    fun blank() = "_".repeat(width)
+
+    val inverse = "${n(divisor)} × ${blank()} = ${n(dividend)}"
+    if (anchor == null) return listOf(inverse)
+
+    val anchorDividend = anchor * divisor
+    val difference = when (result) {
+        4 -> "${n(anchor)} - ${n(1)} = ${blank()}"
+        6 -> "${n(anchor)} + ${n(1)} = ${blank()}"
+        7 -> "${n(anchor)} + ${n(1)} + ${n(1)} = ${blank()}"
+        8 -> "${n(anchor)} - ${n(1)} - ${n(1)} = ${blank()}"
+        9 -> "${n(anchor)} - ${n(1)} = ${blank()}"
+        else -> error("Unsupported division hint result")
+    }
+    return listOf(
+        inverse,
+        "",
+        HINT_SEPARATOR,
+        "",
+        "${n(anchorDividend)} ÷ ${n(divisor)} = ${n(anchor)}",
+        difference,
+    )
 }
 
 private fun fiveComplementHintLines(first: Int, second: Int): List<String>? {
@@ -175,6 +223,7 @@ object PracticeEngine {
         orderedNumbers: Boolean = false,
         random: Random = Random.Default,
         repeat: Int = REPEAT_WRONG_NUMBER,
+        roundSizeOverride: Int? = null,
     ): List<Int> {
         require(highestNumber > 0)
         require(repeat > 0)
@@ -183,7 +232,7 @@ object PracticeEngine {
         require(allNumbers.isNotEmpty())
         require(highestNumber == 1 || allNumbers.size >= 2)
         val validWrongNumbers = wrongSecondNumbers.filter { it in allNumbers }
-        val roundSize = if (keepSetLength || validWrongNumbers.isNotEmpty()) {
+        val roundSize = roundSizeOverride ?: if (keepSetLength || validWrongNumbers.isNotEmpty()) {
             highestNumber
         } else {
             allNumbers.size
@@ -301,12 +350,216 @@ object PracticeEngine {
         randomFirstSecond: Boolean,
         random: Random = Random.Default,
     ): List<Calculation> = secondNumbers.map { secondNumber ->
+        val calculationOperator = if (operator == MathOperator.MIXED) {
+            if (random.nextBoolean()) MathOperator.MULTIPLY else MathOperator.DIVIDE
+        } else {
+            operator
+        }
         Calculation(
             operator = operator,
             firstNumber = firstNumber,
             secondNumber = secondNumber,
-            swapRoles = operator == MathOperator.MULTIPLY &&
+            swapRoles = calculationOperator == MathOperator.MULTIPLY &&
                 randomFirstSecond && random.nextBoolean(),
+            calculationOperator = calculationOperator,
         )
+    }
+
+    fun mixedFirstRoundCalculations(
+        firstNumber: Int,
+        highestNumber: Int,
+        withoutOneAndTen: Boolean,
+        randomFirstSecond: Boolean,
+        roundSize: Int = MIXED_ROUND_LENGTH,
+        random: Random = Random.Default,
+    ): List<Calculation> {
+        val numbers = allowedNumbers(highestNumber, withoutOneAndTen)
+        require(numbers.isNotEmpty())
+        val pairs = listOf(MathOperator.MULTIPLY, MathOperator.DIVIDE)
+            .flatMap { operation -> numbers.map { operation to it } }
+            .shuffled(random)
+        return pairs.take(min(roundSize, pairs.size)).map { (operation, secondNumber) ->
+            Calculation(
+                operator = MathOperator.MIXED,
+                firstNumber = firstNumber,
+                secondNumber = secondNumber,
+                swapRoles = operation == MathOperator.MULTIPLY &&
+                    randomFirstSecond && random.nextBoolean(),
+                calculationOperator = operation,
+            )
+        }
+    }
+
+    fun wildcardFirstRoundCalculations(
+        operator: MathOperator,
+        baseNumbers: List<Int>,
+        secondNumbers: List<Int>,
+        randomFirstSecond: Boolean,
+        roundSize: Int = MIXED_ROUND_LENGTH,
+        random: Random = Random.Default,
+        excludedCalculations: Set<Triple<MathOperator, Int, Int>> = emptySet(),
+    ): List<Calculation> {
+        if (baseNumbers.isEmpty() || secondNumbers.isEmpty()) return emptyList()
+        val candidates = baseNumbers.flatMap { baseNumber ->
+            secondNumbers.flatMap { secondNumber ->
+                val operations = if (operator == MathOperator.MIXED) {
+                    listOf(MathOperator.MULTIPLY, MathOperator.DIVIDE)
+                } else {
+                    listOf(operator)
+                }
+                operations.map { operation -> Triple(operation, baseNumber, secondNumber) }
+            }
+        }.shuffled(random)
+        return candidates
+            .distinctBy { calculationKey(it.first, it.second, it.third) }
+            .filterNot { calculationKey(it.first, it.second, it.third) in excludedCalculations }
+            .take(roundSize)
+            .map { (operation, baseNumber, secondNumber) ->
+                Calculation(
+                    operator = operator,
+                    firstNumber = baseNumber,
+                    secondNumber = secondNumber,
+                    swapRoles = operation == MathOperator.MULTIPLY &&
+                        randomFirstSecond && random.nextBoolean(),
+                    calculationOperator = operation,
+                )
+            }
+    }
+
+    fun additionCalculations(
+        highestInput: Int?,
+        highestResult: Int?,
+        minimumResult: Int = 0,
+        count: Int = ADDITION_ROUND_LENGTH,
+        random: Random = Random.Default,
+    ): List<Calculation> {
+        val pairs = when {
+            highestInput != null -> sampleInputLimitedAdditionPairs(
+                highestInput = highestInput,
+                minimumResult = minimumResult,
+                count = count,
+                random = random,
+            )
+            highestResult != null -> sampleResultLimitedAdditionPairs(
+                highestResult = highestResult,
+                minimumResult = minimumResult,
+                count = count,
+                random = random,
+            )
+            else -> emptyList()
+        }
+        return pairs
+            .map { (first, second) ->
+                Calculation(
+                    operator = MathOperator.ADDITION,
+                    firstNumber = first,
+                    secondNumber = second,
+                    swapRoles = false,
+                )
+            }
+    }
+
+    fun subtractionCalculations(
+        highestInput: Int?,
+        lowestResult: Int?,
+        count: Int = ADDITION_ROUND_LENGTH,
+        random: Random = Random.Default,
+    ): List<Calculation> {
+        if (highestInput == null || lowestResult == null) return emptyList()
+        val availableFirstNumbers = highestInput - lowestResult
+        if (availableFirstNumbers <= 0) return emptyList()
+        val totalCandidates = availableFirstNumbers.toLong() *
+            (availableFirstNumbers + 1L) / 2L
+        return sampleDistinctPairs(
+            totalCandidates = totalCandidates,
+            count = count,
+            random = random,
+        ) {
+            val first = random.nextInt(lowestResult + 1, highestInput + 1)
+            first to random.nextInt(1, first - lowestResult + 1)
+        }.map { (first, second) ->
+            Calculation(
+                operator = MathOperator.SUBTRACTION,
+                firstNumber = first,
+                secondNumber = second,
+                swapRoles = false,
+            )
+        }
+    }
+
+    /**
+     * Samples only the questions needed for a round.  The former implementation
+     * created every possible pair (one million for a limit of 1,000) and shuffled
+     * it before selecting 20 questions.
+     */
+    private fun sampleInputLimitedAdditionPairs(
+        highestInput: Int,
+        minimumResult: Int,
+        count: Int,
+        random: Random,
+    ): List<Pair<Int, Int>> {
+        if (highestInput < 1) return emptyList()
+        val minimumSum = maxOf(2, minimumResult)
+        if (minimumSum > highestInput * 2) return emptyList()
+        val firstStart = maxOf(1, minimumSum - highestInput)
+        var totalCandidates = 0L
+        for (first in firstStart..highestInput) {
+            totalCandidates += highestInput - maxOf(1, minimumSum - first) + 1L
+        }
+        return sampleDistinctPairs(totalCandidates, count, random) {
+            val first = random.nextInt(firstStart, highestInput + 1)
+            first to random.nextInt(maxOf(1, minimumSum - first), highestInput + 1)
+        }
+    }
+
+    private fun sampleResultLimitedAdditionPairs(
+        highestResult: Int,
+        minimumResult: Int,
+        count: Int,
+        random: Random,
+    ): List<Pair<Int, Int>> {
+        val minimumSum = maxOf(2, minimumResult)
+        if (highestResult < minimumSum) return emptyList()
+        val totalCandidates = positivePairCountAtMost(highestResult) -
+            positivePairCountAtMost(minimumSum - 1)
+        return sampleDistinctPairs(totalCandidates, count, random) {
+            val first = random.nextInt(1, highestResult)
+            val maximumSecond = highestResult - first
+            first to random.nextInt(maxOf(1, minimumSum - first), maximumSecond + 1)
+        }
+    }
+
+    private fun positivePairCountAtMost(maximumSum: Int): Long {
+        if (maximumSum < 2) return 0L
+        val numberOfFirstNumbers = maximumSum.toLong() - 1L
+        return numberOfFirstNumbers * (numberOfFirstNumbers + 1L) / 2L
+    }
+
+    private fun sampleDistinctPairs(
+        totalCandidates: Long,
+        count: Int,
+        random: Random,
+        sample: () -> Pair<Int, Int>,
+    ): List<Pair<Int, Int>> {
+        val targetSize = minOf(count.toLong(), totalCandidates).toInt()
+        if (targetSize <= 0) return emptyList()
+        val pairs = LinkedHashSet<Pair<Int, Int>>(targetSize)
+        while (pairs.size < targetSize) {
+            pairs += sample()
+        }
+        return pairs.shuffled(random)
+    }
+
+    private const val MIXED_ROUND_LENGTH = 10
+    private const val ADDITION_ROUND_LENGTH = 20
+
+    private fun calculationKey(
+        operation: MathOperator,
+        baseNumber: Int,
+        secondNumber: Int,
+    ): Triple<MathOperator, Int, Int> = if (operation == MathOperator.MULTIPLY) {
+        Triple(operation, minOf(baseNumber, secondNumber), maxOf(baseNumber, secondNumber))
+    } else {
+        Triple(operation, baseNumber, secondNumber)
     }
 }

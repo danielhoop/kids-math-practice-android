@@ -23,6 +23,20 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var highestNumberText by mutableStateOf("10")
         private set
+    var highestInputText by mutableStateOf("")
+        private set
+    var highestResultText by mutableStateOf("")
+        private set
+    var minimumResultText by mutableStateOf("0")
+        private set
+    var subtractionHighestInputText by mutableStateOf("")
+        private set
+    var subtractionLowestResultText by mutableStateOf("")
+        private set
+    var subtractionMinimumInputText by mutableStateOf("")
+        private set
+    var subtractionMaximumResultText by mutableStateOf("")
+        private set
     var randomFirstSecond by mutableStateOf(true)
         private set
     var withoutOneAndTen by mutableStateOf(true)
@@ -75,9 +89,16 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var divisionNumbers by mutableStateOf((1..12).toSet())
         private set
+    var mixedNumbers by mutableStateOf((1..12).toSet())
+        private set
+    var multiplicationShowHints by mutableStateOf(true)
+        private set
+    var divisionShowHints by mutableStateOf(true)
+        private set
 
     private var highestNumber = 10
     private var firstNumber = 1
+    private var wildcardPractice = false
     private var calculations = emptyList<Calculation>()
     private var calculationIndex = 0
     private var firstRoundLength = 0
@@ -103,9 +124,18 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     configurationDatabase.loadAvailableNumbers(MathOperator.DIVIDE),
                 )
             }
+            val (multiplicationHints, divisionHints) = withContext(Dispatchers.IO) {
+                configurationDatabase.loadShowHints(MathOperator.MULTIPLY) to
+                    configurationDatabase.loadShowHints(MathOperator.DIVIDE)
+            }
             settingsPin = pin
             multiplicationNumbers = multiplication
             divisionNumbers = division
+            mixedNumbers = withContext(Dispatchers.IO) {
+                configurationDatabase.loadAvailableNumbers(MathOperator.MIXED)
+            }
+            multiplicationShowHints = multiplicationHints
+            divisionShowHints = divisionHints
             settingsPinLoaded = true
         }
         timerPreferenceLoadJob = viewModelScope.launch {
@@ -127,7 +157,50 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         applyDefaultConfiguration(value)
         scoresByFirstNumber = emptyMap()
         screen = AppScreen.SETUP
-        loadConfiguration(value)
+        when (value) {
+            MathOperator.ADDITION -> loadAdditionConfiguration()
+            MathOperator.SUBTRACTION -> loadSubtractionConfiguration()
+            else -> loadConfiguration(value)
+        }
+    }
+
+    fun updateHighestInput(value: String) {
+        if (value.all(Char::isDigit)) highestInputText = value
+        highestNumberError = null
+    }
+
+    fun updateHighestResult(value: String) {
+        if (value.all(Char::isDigit)) highestResultText = value
+        highestNumberError = null
+    }
+
+    fun updateMinimumResult(value: String) {
+        if (value.all(Char::isDigit)) {
+            minimumResultText = value
+            saveAdditionConfiguration()
+        }
+    }
+
+    fun updateSubtractionHighestInput(value: String) {
+        if (value.all(Char::isDigit)) subtractionHighestInputText = value
+    }
+
+    fun updateSubtractionLowestResult(value: String) {
+        if (value.all(Char::isDigit)) subtractionLowestResultText = value
+    }
+
+    fun updateSubtractionMinimumInput(value: String) {
+        if (value.all(Char::isDigit)) {
+            subtractionMinimumInputText = value
+            saveSubtractionConfiguration()
+        }
+    }
+
+    fun updateSubtractionMaximumResult(value: String) {
+        if (value.all(Char::isDigit)) {
+            subtractionMaximumResultText = value
+            saveSubtractionConfiguration()
+        }
     }
 
     fun openSettings() {
@@ -142,14 +215,52 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun numberIsAvailable(operator: MathOperator, number: Int): Boolean =
-        number in if (operator == MathOperator.MULTIPLY) multiplicationNumbers else divisionNumbers
+        number in when (operator) {
+            MathOperator.ADDITION -> emptySet()
+            MathOperator.SUBTRACTION -> emptySet()
+            MathOperator.MULTIPLY -> multiplicationNumbers
+            MathOperator.DIVIDE -> divisionNumbers
+            MathOperator.MIXED -> mixedNumbers
+        }
+
+    private fun availableNumbers(operator: MathOperator): List<Int> = when (operator) {
+        MathOperator.ADDITION -> emptyList()
+        MathOperator.SUBTRACTION -> emptyList()
+        MathOperator.MULTIPLY -> multiplicationNumbers.toList()
+        MathOperator.DIVIDE -> divisionNumbers.toList()
+        MathOperator.MIXED -> mixedNumbers.toList()
+    }
+
+    fun showHints(operator: MathOperator): Boolean =
+        if (operator == MathOperator.MULTIPLY) multiplicationShowHints else divisionShowHints
+
+    fun showHintsFor(calculation: Calculation): Boolean = showHints(calculation.calculationOperator)
+
+    fun updateShowHints(operator: MathOperator, show: Boolean) {
+        if (operator == MathOperator.MULTIPLY) multiplicationShowHints = show else divisionShowHints = show
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveShowHints(operator, show)
+        }
+    }
 
     fun updateNumberAvailability(operator: MathOperator, number: Int, enabled: Boolean) {
-        val updated = (if (operator == MathOperator.MULTIPLY) multiplicationNumbers else divisionNumbers)
+        val updated = (when (operator) {
+            MathOperator.ADDITION -> emptySet()
+            MathOperator.SUBTRACTION -> emptySet()
+            MathOperator.MULTIPLY -> multiplicationNumbers
+            MathOperator.DIVIDE -> divisionNumbers
+            MathOperator.MIXED -> mixedNumbers
+        })
             .toMutableSet()
             .apply { if (enabled) add(number) else remove(number) }
             .toSet()
-        if (operator == MathOperator.MULTIPLY) multiplicationNumbers = updated else divisionNumbers = updated
+        when (operator) {
+            MathOperator.ADDITION -> Unit
+            MathOperator.SUBTRACTION -> Unit
+            MathOperator.MULTIPLY -> multiplicationNumbers = updated
+            MathOperator.DIVIDE -> divisionNumbers = updated
+            MathOperator.MIXED -> mixedNumbers = updated
+        }
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.saveAvailableNumbers(operator, updated)
         }
@@ -161,7 +272,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateRandomFirstSecond(value: Boolean) {
-        randomFirstSecond = value && operator == MathOperator.MULTIPLY
+        randomFirstSecond = value && operator != MathOperator.DIVIDE
     }
 
     fun updateWithoutOneAndTen(value: Boolean) {
@@ -238,6 +349,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
         highestNumber = parsedHighestNumber
         firstNumber = chosenFirstNumber
+        wildcardPractice = false
         calculationIndex = 0
         calculationNumber = 1
         errorCount = 0
@@ -253,14 +365,170 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             keepSetLength = forceSetLength,
             orderedNumbers = orderedNumbers,
         )
+        if (operator == MathOperator.MIXED) {
+            calculations = PracticeEngine.mixedFirstRoundCalculations(
+                firstNumber = firstNumber,
+                highestNumber = highestNumber,
+                withoutOneAndTen = withoutOneAndTen,
+                randomFirstSecond = randomFirstSecond,
+            )
+            firstRoundLength = calculations.size
+            totalCalculationCount = firstRoundLength * 2
+            currentCalculation = calculations.first()
+            screen = AppScreen.PRACTICE
+            return
+        }
         firstRoundLength = firstRoundNumbers.size
         totalCalculationCount = firstRoundLength * 2
         calculations = PracticeEngine.calculations(
             operator = operator,
             firstNumber = firstNumber,
             secondNumbers = firstRoundNumbers,
-            randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
+            randomFirstSecond = operator != MathOperator.DIVIDE && randomFirstSecond,
         )
+        currentCalculation = calculations.first()
+        screen = AppScreen.PRACTICE
+    }
+
+    fun startWildcardPractice() {
+        if (isConfigurationLoading) return
+        val parsedHighestNumber = highestNumberText.toIntOrNull()
+        if (parsedHighestNumber == null || parsedHighestNumber !in 1..1000) {
+            highestNumberError = "Enter a number from 1 to 1000"
+            return
+        }
+        if (withoutOneAndTen && parsedHighestNumber < 3) {
+            highestNumberError = "Choose at least 3 when excluding 1 and 10"
+            return
+        }
+        val baseNumbers = availableNumbers(operator)
+            .filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+        val secondNumbers = (1..parsedHighestNumber)
+            .filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+        if (baseNumbers.isEmpty() || secondNumbers.isEmpty()) {
+            highestNumberError = "Enable at least one available number for this mode"
+            return
+        }
+
+        highestNumber = parsedHighestNumber
+        firstNumber = 0
+        wildcardPractice = true
+        calculationIndex = 0
+        calculationNumber = 1
+        errorCount = 0
+        correctFlashSequence = 0
+        wrongSecondNumbers.clear()
+        wrongDialogCalculation = null
+        retryCalculation = null
+        showLeaveConfirmation = false
+        saveConfiguration()
+        calculations = PracticeEngine.wildcardFirstRoundCalculations(
+            operator = operator,
+            baseNumbers = baseNumbers,
+            secondNumbers = secondNumbers,
+            randomFirstSecond = randomFirstSecond,
+        )
+        if (calculations.isEmpty()) {
+            highestNumberError = "No calculations are available with these settings"
+            return
+        }
+        firstRoundLength = calculations.size
+        totalCalculationCount = firstRoundLength * 2
+        currentCalculation = calculations.first()
+        screen = AppScreen.PRACTICE
+    }
+
+    fun startAdditionPractice() {
+        if (isConfigurationLoading) return
+        val input = highestInputText.toIntOrNull()
+        val result = highestResultText.toIntOrNull()
+        val minimumResult = minimumResultText.toIntOrNull() ?: 0
+        if ((input == null) == (result == null)) {
+            highestNumberError = "Choose either Highest input or Highest result, but not both"
+            return
+        }
+        if (input != null && input !in 1..1000) {
+            highestNumberError = "Highest input must be from 1 to 1000"
+            return
+        }
+        if (result != null && result < 1) {
+            highestNumberError = "Highest result must be at least 1"
+            return
+        }
+        if (result != null && result < minimumResult) {
+            highestNumberError = "Highest result must be at least $minimumResult"
+            return
+        }
+        highestNumberError = null
+        highestInputText = input?.toString() ?: ""
+        highestResultText = result?.toString() ?: ""
+        saveAdditionConfiguration()
+        firstNumber = 0
+        wildcardPractice = false
+        calculationIndex = 0
+        calculationNumber = 1
+        errorCount = 0
+        correctFlashSequence = 0
+        wrongSecondNumbers.clear()
+        wrongDialogCalculation = null
+        retryCalculation = null
+        showLeaveConfirmation = false
+        calculations = PracticeEngine.additionCalculations(input, result, minimumResult = minimumResult)
+        if (calculations.isEmpty()) {
+            highestNumberError = "No calculations are available with these settings"
+            return
+        }
+        firstRoundLength = calculations.size
+        totalCalculationCount = calculations.size
+        currentCalculation = calculations.first()
+        screen = AppScreen.PRACTICE
+    }
+
+    fun startSubtractionPractice() {
+        if (isConfigurationLoading) return
+        val highestInput = subtractionHighestInputText.toIntOrNull()
+        val lowestResult = subtractionLowestResultText.toIntOrNull()
+        val minimumInput = subtractionMinimumInputText.toIntOrNull()
+        val maximumResult = subtractionMaximumResultText.toIntOrNull()
+        if (highestInput == null || lowestResult == null) {
+            highestNumberError = "Enter Highest input and Lowest result"
+            return
+        }
+        if (lowestResult >= highestInput) {
+            highestNumberError = "Lowest result must be smaller than Highest input"
+            return
+        }
+        if (minimumInput != null && highestInput < minimumInput) {
+            highestNumberError = "Highest input must be at least $minimumInput"
+            return
+        }
+        if (maximumResult != null && lowestResult > maximumResult) {
+            highestNumberError = "Lowest result must be at most $maximumResult"
+            return
+        }
+        if (highestInput !in 1..1000 || lowestResult < 0) {
+            highestNumberError = "Enter values from 0 to 1000"
+            return
+        }
+        highestNumberError = null
+        saveSubtractionConfiguration()
+        firstNumber = 0
+        wildcardPractice = false
+        calculationIndex = 0
+        calculationNumber = 1
+        errorCount = 0
+        correctFlashSequence = 0
+        wrongSecondNumbers.clear()
+        wrongDialogCalculation = null
+        retryCalculation = null
+        showLeaveConfirmation = false
+        calculations = PracticeEngine.subtractionCalculations(highestInput, lowestResult)
+        if (calculations.isEmpty()) {
+            highestNumberError = "No calculations are available with these settings"
+            return
+        }
+        firstRoundLength = calculations.size
+        totalCalculationCount = calculations.size
         currentCalculation = calculations.first()
         screen = AppScreen.PRACTICE
     }
@@ -281,7 +549,9 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         } else {
             errorCount++
             wrongSecondNumbers += calculation.secondNumber
-            if (!forceSetLength && calculationIndex < firstRoundLength) {
+            if (operator != MathOperator.ADDITION && operator != MathOperator.SUBTRACTION &&
+                !forceSetLength && calculationIndex < firstRoundLength
+            ) {
                 totalCalculationCount = firstRoundLength + highestNumber
             }
             wrongDialogCalculation = calculation
@@ -339,7 +609,11 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     fun returnToSetup() {
         screen = AppScreen.SETUP
-        loadConfiguration(operator)
+        when (operator) {
+            MathOperator.ADDITION -> loadAdditionConfiguration()
+            MathOperator.SUBTRACTION -> loadSubtractionConfiguration()
+            else -> loadConfiguration(operator)
+        }
     }
 
     override fun onCleared() {
@@ -350,11 +624,53 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     private fun applyDefaultConfiguration(selectedOperator: MathOperator) {
         highestNumberText = "10"
-        randomFirstSecond = selectedOperator == MathOperator.MULTIPLY
+        highestInputText = ""
+        highestResultText = ""
+        minimumResultText = "0"
+        subtractionHighestInputText = ""
+        subtractionLowestResultText = ""
+        subtractionMinimumInputText = ""
+        subtractionMaximumResultText = ""
+        randomFirstSecond = selectedOperator != MathOperator.DIVIDE
         withoutOneAndTen = true
         autoEnter = false
         orderedNumbers = false
         highestNumberError = null
+    }
+
+    private fun loadAdditionConfiguration() {
+        configurationLoadJob?.cancel()
+        isConfigurationLoading = true
+        configurationLoadJob = viewModelScope.launch {
+            val configuration = withContext(Dispatchers.IO) {
+                configurationDatabase.loadAdditionConfiguration()
+            }
+            if (operator == MathOperator.ADDITION && configuration != null) {
+                highestInputText = configuration.highestInput?.toString() ?: ""
+                highestResultText = configuration.highestResult?.toString() ?: ""
+                autoEnter = configuration.autoEnter
+                minimumResultText = configuration.minimumResult.toString()
+            }
+            isConfigurationLoading = false
+        }
+    }
+
+    private fun loadSubtractionConfiguration() {
+        configurationLoadJob?.cancel()
+        isConfigurationLoading = true
+        configurationLoadJob = viewModelScope.launch {
+            val configuration = withContext(Dispatchers.IO) {
+                configurationDatabase.loadSubtractionConfiguration()
+            }
+            if (operator == MathOperator.SUBTRACTION && configuration != null) {
+                subtractionHighestInputText = configuration.highestInput?.toString() ?: ""
+                subtractionLowestResultText = configuration.lowestResult?.toString() ?: ""
+                autoEnter = configuration.autoEnter
+                subtractionMinimumInputText = configuration.minimumInput?.toString() ?: ""
+                subtractionMaximumResultText = configuration.maximumResult?.toString() ?: ""
+            }
+            isConfigurationLoading = false
+        }
     }
 
     private fun loadConfiguration(selectedOperator: MathOperator) {
@@ -370,7 +686,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                 scoresByFirstNumber = savedScores
                 if (savedConfiguration != null) {
                     highestNumberText = savedConfiguration.highestNumber.toString()
-                    randomFirstSecond = selectedOperator == MathOperator.MULTIPLY &&
+                    randomFirstSecond = selectedOperator != MathOperator.DIVIDE &&
                         savedConfiguration.randomFirstSecond
                     withoutOneAndTen = savedConfiguration.withoutOneAndTen
                     autoEnter = savedConfiguration.autoEnter
@@ -384,7 +700,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private fun saveConfiguration() {
         val configuration = PracticeConfiguration(
             highestNumber = highestNumber,
-            randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
+            randomFirstSecond = operator != MathOperator.DIVIDE && randomFirstSecond,
             withoutOneAndTen = withoutOneAndTen,
             autoEnter = autoEnter,
             orderedNumbers = orderedNumbers,
@@ -394,7 +710,35 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun saveAdditionConfiguration() {
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveAdditionConfiguration(
+                AdditionConfiguration(
+                    highestInput = highestInputText.toIntOrNull(),
+                    highestResult = highestResultText.toIntOrNull(),
+                    autoEnter = autoEnter,
+                    minimumResult = minimumResultText.toIntOrNull() ?: 0,
+                ),
+            )
+        }
+    }
+
+    private fun saveSubtractionConfiguration() {
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveSubtractionConfiguration(
+                SubtractionConfiguration(
+                    highestInput = subtractionHighestInputText.toIntOrNull(),
+                    lowestResult = subtractionLowestResultText.toIntOrNull(),
+                    autoEnter = autoEnter,
+                    minimumInput = subtractionMinimumInputText.toIntOrNull(),
+                    maximumResult = subtractionMaximumResultText.toIntOrNull(),
+                ),
+            )
+        }
+    }
+
     private fun saveScore() {
+        if (wildcardPractice || operator == MathOperator.ADDITION || operator == MathOperator.SUBTRACTION) return
         scoresByFirstNumber = scoresByFirstNumber + (firstNumber to errorCount)
         scoreSaveJob = viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.saveScore(operator, firstNumber, errorCount)
@@ -460,20 +804,61 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private fun advance() {
         calculationIndex++
 
-        if (calculationIndex == firstRoundLength) {
-            calculations = calculations + PracticeEngine.calculations(
-                operator = operator,
-                firstNumber = firstNumber,
-                secondNumbers = PracticeEngine.reviewRoundNumbers(
+        if (calculationIndex == firstRoundLength &&
+            operator != MathOperator.ADDITION && operator != MathOperator.SUBTRACTION
+        ) {
+            val reviewNumbers = if (wildcardPractice && wrongSecondNumbers.isEmpty()) {
+                (1..highestNumber).filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+            } else {
+                PracticeEngine.reviewRoundNumbers(
                     highestNumber = highestNumber,
                     wrongSecondNumbers = wrongSecondNumbers,
                     withoutOneAndTen = withoutOneAndTen,
                     previousSecondNumber = calculations.last().secondNumber,
                     keepSetLength = forceSetLength,
                     orderedNumbers = orderedNumbers,
-                ),
-                randomFirstSecond = operator == MathOperator.MULTIPLY && randomFirstSecond,
-            )
+                    roundSizeOverride = if (operator == MathOperator.MIXED || wildcardPractice) {
+                        firstRoundLength
+                    } else {
+                        null
+                    },
+                )
+            }
+            val reviewCalculations = if (wildcardPractice) {
+                PracticeEngine.wildcardFirstRoundCalculations(
+                    operator = operator,
+                    baseNumbers = availableNumbers(operator).filterNot {
+                        withoutOneAndTen && (it == 1 || it == 10)
+                    },
+                    secondNumbers = reviewNumbers,
+                    randomFirstSecond = randomFirstSecond,
+                    roundSize = firstRoundLength,
+                    excludedCalculations = if (wrongSecondNumbers.isEmpty()) {
+                        calculations.map { calculation ->
+                            val operation = calculation.calculationOperator
+                            if (operation == MathOperator.MULTIPLY) {
+                                Triple(
+                                    operation,
+                                    minOf(calculation.firstNumber, calculation.secondNumber),
+                                    maxOf(calculation.firstNumber, calculation.secondNumber),
+                                )
+                            } else {
+                                Triple(operation, calculation.firstNumber, calculation.secondNumber)
+                            }
+                        }.toSet()
+                    } else {
+                        emptySet()
+                    },
+                )
+            } else {
+                PracticeEngine.calculations(
+                    operator = operator,
+                    firstNumber = firstNumber,
+                    secondNumbers = reviewNumbers,
+                    randomFirstSecond = operator != MathOperator.DIVIDE && randomFirstSecond,
+                )
+            }
+            calculations = calculations + reviewCalculations
             totalCalculationCount = calculations.size
         }
 

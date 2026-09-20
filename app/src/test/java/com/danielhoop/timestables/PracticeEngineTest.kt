@@ -159,11 +159,11 @@ class PracticeEngineTest {
     }
 
     @Test
-    fun hintsAreOnlyAvailableForMultiplicationTablesTwoThroughNine() {
+    fun hintsAreAvailableForMultiplicationAndDivision() {
         assertTrue(Calculation(MathOperator.MULTIPLY, 2, 6, false).hintLines() != null)
         assertTrue(Calculation(MathOperator.MULTIPLY, 9, 6, false).hintLines() != null)
         assertEquals(null, Calculation(MathOperator.MULTIPLY, 1, 10, false).hintLines())
-        assertEquals(null, Calculation(MathOperator.DIVIDE, 3, 6, false).hintLines())
+        assertTrue(Calculation(MathOperator.DIVIDE, 3, 6, false).hintLines() != null)
     }
 
     @Test
@@ -232,6 +232,142 @@ class PracticeEngineTest {
         assertEquals("----------------", lines?.get(2))
         assertEquals("", lines?.get(3))
         assertEquals("5 ×  2 = 10", lines?.get(4))
+    }
+
+    @Test
+    fun divisionHintsAlwaysStartWithInverseMultiplication() {
+        assertEquals(
+            listOf("3 × _ = 6"),
+            Calculation(MathOperator.DIVIDE, 3, 2, false).hintLines(),
+        )
+        assertEquals(
+            listOf("3 × _ = 9"),
+            Calculation(MathOperator.DIVIDE, 3, 3, false).hintLines(),
+        )
+    }
+
+    @Test
+    fun divisionAdjustmentHintsApplyOnlyToResultsFourThroughNineExceptFive() {
+        val expected = mapOf(
+            4 to listOf(" 3 × __ = 12", "", "----------------", "", "15 ÷  3 =  5", " 5 -  1 = __"),
+            6 to listOf(" 3 × __ = 18", "", "----------------", "", "15 ÷  3 =  5", " 5 +  1 = __"),
+            7 to listOf(" 3 × __ = 21", "", "----------------", "", "15 ÷  3 =  5", " 5 +  1 +  1 = __"),
+            8 to listOf(" 3 × __ = 24", "", "----------------", "", "30 ÷  3 = 10", "10 -  1 -  1 = __"),
+            9 to listOf(" 3 × __ = 27", "", "----------------", "", "30 ÷  3 = 10", "10 -  1 = __"),
+        )
+        expected.forEach { (result, lines) ->
+            assertEquals(lines, Calculation(MathOperator.DIVIDE, 3, result, false).hintLines())
+        }
+    }
+
+    @Test
+    fun mixedFirstRoundUsesUniqueOperatorAndNumberPairs() {
+        val calculations = PracticeEngine.mixedFirstRoundCalculations(
+            firstNumber = 3,
+            highestNumber = 10,
+            withoutOneAndTen = true,
+            randomFirstSecond = true,
+            random = Random(11),
+        )
+
+        assertEquals(10, calculations.size)
+        assertEquals(
+            10,
+            calculations.map { it.calculationOperator to it.secondNumber }.toSet().size,
+        )
+        assertTrue(calculations.all { it.operator == MathOperator.MIXED })
+    }
+
+    @Test
+    fun wildcardFirstRoundSamplesUniqueCalculationsAndHandlesEmptyPools() {
+        val calculations = PracticeEngine.wildcardFirstRoundCalculations(
+            operator = MathOperator.MIXED,
+            baseNumbers = (2..9).toList(),
+            secondNumbers = (2..9).toList(),
+            randomFirstSecond = true,
+            random = Random(12),
+        )
+
+        assertEquals(10, calculations.size)
+        assertEquals(
+            10,
+            calculations.map { Triple(it.calculationOperator, it.firstNumber, it.secondNumber) }.toSet().size,
+        )
+        assertTrue(
+            PracticeEngine.wildcardFirstRoundCalculations(
+                operator = MathOperator.MULTIPLY,
+                baseNumbers = emptyList(),
+                secondNumbers = (1..10).toList(),
+                randomFirstSecond = false,
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun additionSamplesUseEitherInputLimitOrResultLimit() {
+        val inputLimited = PracticeEngine.additionCalculations(
+            highestInput = 6,
+            highestResult = null,
+            random = Random(13),
+        )
+        assertEquals(20, inputLimited.size)
+        assertTrue(inputLimited.all { it.calculationOperator == MathOperator.ADDITION })
+        assertTrue(inputLimited.map { it.expression }.toSet().size == inputLimited.size)
+
+        val resultLimited = PracticeEngine.additionCalculations(
+            highestInput = null,
+            highestResult = 10,
+            random = Random(14),
+        )
+        assertEquals(20, resultLimited.size)
+        assertTrue(resultLimited.all { it.expectedAnswer <= 10 })
+
+        val minimumResult = PracticeEngine.additionCalculations(
+            highestInput = 6,
+            highestResult = null,
+            minimumResult = 8,
+            random = Random(15),
+        )
+        assertTrue(minimumResult.all { it.expectedAnswer >= 8 })
+    }
+
+    @Test
+    fun subtractionSamplesRespectLowestResult() {
+        val calculations = PracticeEngine.subtractionCalculations(
+            highestInput = 10,
+            lowestResult = 3,
+            random = Random(16),
+        )
+
+        assertEquals(20, calculations.size)
+        assertTrue(calculations.all { it.expectedAnswer >= 3 })
+        assertTrue(calculations.all { it.firstNumber <= 10 && it.secondNumber <= 10 })
+    }
+
+    @Test
+    fun largeAdditionResultLimitSamplesOnlyTheRequestedDistinctPairs() {
+        val calculations = PracticeEngine.additionCalculations(
+            highestInput = null,
+            highestResult = 100_000,
+            random = Random(17),
+        )
+
+        assertEquals(20, calculations.size)
+        assertEquals(20, calculations.map { it.firstNumber to it.secondNumber }.toSet().size)
+        assertTrue(calculations.all { it.expectedAnswer <= 100_000 })
+    }
+
+    @Test
+    fun largeSubtractionInputLimitSamplesOnlyTheRequestedDistinctPairs() {
+        val calculations = PracticeEngine.subtractionCalculations(
+            highestInput = 1_000,
+            lowestResult = 0,
+            random = Random(18),
+        )
+
+        assertEquals(20, calculations.size)
+        assertEquals(20, calculations.map { it.firstNumber to it.secondNumber }.toSet().size)
+        assertTrue(calculations.all { it.expectedAnswer >= 0 })
     }
 
     @Test

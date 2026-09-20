@@ -82,6 +82,7 @@ private val MildGreen = Color(0xFFB8E6C0)
 private val MildRed = Color(0xFFF2B8B5)
 private val Purple = Color(0xFF6352C7)
 private val ConfigurationLabelFontSize = 18.sp
+private const val AUTO_ENTER_VISIBILITY_MILLIS = 80L
 
 class MainActivity : ComponentActivity() {
     private val practiceModel: PracticeViewModel by viewModels()
@@ -125,6 +126,7 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun OperatorScreen(model: PracticeViewModel) {
     var showTimerDialog by remember { mutableStateOf(false) }
     var showTimerHistoryDialog by remember { mutableStateOf(false) }
@@ -132,6 +134,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
     var pinText by remember(showSettingsPinDialog) { mutableStateOf("") }
     var repeatPinText by remember(showSettingsPinDialog) { mutableStateOf("") }
     var pinError by remember(showSettingsPinDialog) { mutableStateOf<String?>(null) }
+    val pinFocusRequester = remember { FocusRequester() }
     var minutesText by remember(showTimerDialog, model.timerMinutes) {
         mutableStateOf(model.timerMinutes.toString())
     }
@@ -140,9 +143,21 @@ private fun OperatorScreen(model: PracticeViewModel) {
     GrayPage {
         Text("What would you like to practice?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(42.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            OperatorButton("×") { model.chooseOperator(MathOperator.MULTIPLY) }
-            OperatorButton("÷") { model.chooseOperator(MathOperator.DIVIDE) }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OperatorButton("+") { model.chooseOperator(MathOperator.ADDITION) }
+                OperatorButton("-") { model.chooseOperator(MathOperator.SUBTRACTION) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OperatorButton("×") { model.chooseOperator(MathOperator.MULTIPLY) }
+                OperatorButton("÷") { model.chooseOperator(MathOperator.DIVIDE) }
+            }
+            Row {
+                OperatorButton("×÷") { model.chooseOperator(MathOperator.MIXED) }
+            }
         }
         Spacer(Modifier.height(34.dp))
         Button(onClick = { showTimerDialog = true }) {
@@ -164,16 +179,27 @@ private fun OperatorScreen(model: PracticeViewModel) {
             containerColor = DefaultGray,
             title = { Text(if (creatingPin) "Create settings PIN" else "Settings PIN") },
             text = {
+                LaunchedEffect(Unit) {
+                    delay(100)
+                    pinFocusRequester.requestFocus()
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = pinText,
                         onValueChange = { value ->
-                            if (value.all(Char::isDigit)) pinText = value
+                            if (value.all(Char::isDigit)) {
+                                pinText = value
+                                if (!creatingPin && value.isNotEmpty() && value == model.settingsPin) {
+                                    showSettingsPinDialog = false
+                                    model.openSettings()
+                                }
+                            }
                             pinError = null
                         },
                         label = { Text(if (creatingPin) "PIN" else "Enter PIN") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.focusRequester(pinFocusRequester),
                         singleLine = true,
                     )
                     if (creatingPin) {
@@ -321,16 +347,20 @@ private fun OperatorScreen(model: PracticeViewModel) {
 private fun OperatorButton(symbol: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.size(126.dp),
+        modifier = Modifier.size(96.dp),
         shape = RoundedCornerShape(28.dp),
     ) {
-        Text(symbol, fontSize = 64.sp, fontWeight = FontWeight.Bold)
+        Text(symbol, fontSize = if (symbol == "×÷") 42.sp else 54.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SetupScreen(model: PracticeViewModel) {
+    if (model.operator == MathOperator.ADDITION || model.operator == MathOperator.SUBTRACTION) {
+        if (model.operator == MathOperator.ADDITION) AdditionSetupScreen(model) else SubtractionSetupScreen(model)
+        return
+    }
     Scaffold(
         containerColor = DefaultGray,
         topBar = { BackBar(model::goBack) },
@@ -356,7 +386,13 @@ private fun SetupScreen(model: PracticeViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = if (model.operator == MathOperator.MULTIPLY) "Choose a times table" else "Choose a division table",
+                text = when (model.operator) {
+                    MathOperator.ADDITION -> "Addition"
+                    MathOperator.SUBTRACTION -> "Subtraction"
+                    MathOperator.MULTIPLY -> "Multiplication"
+                    MathOperator.DIVIDE -> "Division"
+                    MathOperator.MIXED -> "Multiplication & Division (mixed)"
+                },
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -402,6 +438,18 @@ private fun SetupScreen(model: PracticeViewModel) {
                         }
                     }
                 }
+                Spacer(Modifier.weight(1f))
+                Button(
+                    onClick = model::startWildcardPractice,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(58.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(7.dp),
+                ) {
+                    Text("?", fontSize = 23.sp)
+                }
+                Spacer(Modifier.weight(1f))
             }
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
@@ -431,7 +479,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                     onCheckedChange = model::updateOrderedNumbers,
                 )
             }
-            if (model.operator == MathOperator.MULTIPLY) {
+            if (model.operator != MathOperator.DIVIDE) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -492,6 +540,136 @@ private fun SetupScreen(model: PracticeViewModel) {
 }
 
 @Composable
+private fun AdditionSetupScreen(model: PracticeViewModel) {
+    Scaffold(
+        containerColor = DefaultGray,
+        topBar = { BackBar(model::goBack) },
+    ) { padding ->
+        if (model.isConfigurationLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Addition", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = model.highestInputText,
+                onValueChange = model::updateHighestInput,
+                label = { Text("Highest input") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = model.highestResultText,
+                onValueChange = model::updateHighestResult,
+                label = { Text("Highest result") },
+                supportingText = { model.highestNumberError?.let { Text(it) } },
+                isError = model.highestNumberError != null,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Auto enter", fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
+                Switch(checked = model.autoEnter, onCheckedChange = model::updateAutoEnter)
+            }
+            Button(
+                onClick = model::startAdditionPractice,
+                modifier = Modifier.height(56.dp),
+            ) {
+                Text("Start", fontSize = 19.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubtractionSetupScreen(model: PracticeViewModel) {
+    Scaffold(
+        containerColor = DefaultGray,
+        topBar = { BackBar(model::goBack) },
+    ) { padding ->
+        if (model.isConfigurationLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("Subtraction", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = model.subtractionHighestInputText,
+                onValueChange = model::updateSubtractionHighestInput,
+                label = { Text("Highest input") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = model.subtractionLowestResultText,
+                onValueChange = model::updateSubtractionLowestResult,
+                label = { Text("Lowest result") },
+                supportingText = { model.highestNumberError?.let { Text(it) } },
+                isError = model.highestNumberError != null,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Auto enter", fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
+                Switch(checked = model.autoEnter, onCheckedChange = model::updateAutoEnter)
+            }
+            Button(
+                onClick = model::startSubtractionPractice,
+                modifier = Modifier.height(56.dp),
+            ) {
+                Text("Start", fontSize = 19.sp)
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsScreen(model: PracticeViewModel) {
     Scaffold(
         containerColor = DefaultGray,
@@ -506,7 +684,40 @@ private fun SettingsScreen(model: PracticeViewModel) {
         ) {
             Text("Parental settings", fontSize = 25.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(20.dp))
+            Text("Addition", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = model.minimumResultText,
+                onValueChange = model::updateMinimumResult,
+                label = { Text("Minimum result") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(24.dp))
+            Text("Subtraction", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = model.subtractionMinimumInputText,
+                onValueChange = model::updateSubtractionMinimumInput,
+                label = { Text("Minimum input") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = model.subtractionMaximumResultText,
+                onValueChange = model::updateSubtractionMaximumResult,
+                label = { Text("Maximum result") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(24.dp))
             Text("Multiplication", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            SettingsHintsSwitch(
+                enabled = model.multiplicationShowHints,
+                onEnabledChange = { model.updateShowHints(MathOperator.MULTIPLY, it) },
+            )
             (1..12).forEach { number ->
                 SettingsNumberRow(
                     number = number,
@@ -516,6 +727,10 @@ private fun SettingsScreen(model: PracticeViewModel) {
             }
             Spacer(Modifier.height(24.dp))
             Text("Division", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            SettingsHintsSwitch(
+                enabled = model.divisionShowHints,
+                onEnabledChange = { model.updateShowHints(MathOperator.DIVIDE, it) },
+            )
             (1..12).forEach { number ->
                 SettingsNumberRow(
                     number = number,
@@ -523,7 +738,30 @@ private fun SettingsScreen(model: PracticeViewModel) {
                     onEnabledChange = { model.updateNumberAvailability(MathOperator.DIVIDE, number, it) },
                 )
             }
+            Spacer(Modifier.height(24.dp))
+            Text("Mixed multiplication and division", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            (1..12).forEach { number ->
+                SettingsNumberRow(
+                    number = number,
+                    enabled = number in model.mixedNumbers,
+                    onEnabledChange = { model.updateNumberAvailability(MathOperator.MIXED, number, it) },
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun SettingsHintsSwitch(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("Show hints", fontSize = 19.sp)
+        Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
 }
 
@@ -544,7 +782,7 @@ private fun SettingsNumberRow(number: Int, enabled: Boolean, onEnabledChange: (B
 @Composable
 private fun PracticeScreen(model: PracticeViewModel) {
     val calculation = model.currentCalculation ?: return
-    val hintLines = calculation.hintLines()
+    val hintLines = if (model.showHintsFor(calculation)) calculation.hintLines() else null
     var showHintDialog by remember(model.calculationNumber) { mutableStateOf(false) }
     var showGreen by remember { mutableStateOf(false) }
     val isWrong = model.wrongDialogCalculation != null
@@ -778,13 +1016,34 @@ private fun AnswerInput(
     onSubmit: (String) -> Unit,
 ) {
     var answer by remember(questionNumber) { mutableStateOf("") }
+    var answerWasSubmitted by remember(questionNumber) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    fun submitCurrentAnswer() {
+        if (answer.isNotEmpty() && !answerWasSubmitted) {
+            answerWasSubmitted = true
+            onSubmit(answer)
+        }
+    }
 
     LaunchedEffect(questionNumber) {
         delay(150)
         focusRequester.requestFocus()
         keyboardController?.show()
+    }
+
+    // Let Compose render the final digit once before auto-enter moves to the
+    // next question. Without this small delay, one-digit correct answers such
+    // as 9 can appear never to have been entered at all.
+    LaunchedEffect(autoEnter, answer, expectedAnswer) {
+        if (autoEnter &&
+            !answerWasSubmitted &&
+            answer.length == expectedAnswer.toString().length
+        ) {
+            delay(AUTO_ENTER_VISIBILITY_MILLIS)
+            submitCurrentAnswer()
+        }
     }
 
     OutlinedTextField(
@@ -794,9 +1053,6 @@ private fun AnswerInput(
                 val digitWasAdded = value.length > answer.length
                 answer = value
                 if (digitWasAdded) onDigitEntered()
-                if (autoEnter && value.length == expectedAnswer.toString().length) {
-                    onSubmit(value)
-                }
             }
         },
         enabled = enabled,
@@ -810,7 +1066,7 @@ private fun AnswerInput(
             keyboardType = KeyboardType.Number,
             imeAction = ImeAction.Done,
         ),
-        keyboardActions = KeyboardActions(onDone = { onSubmit(answer) }),
+        keyboardActions = KeyboardActions(onDone = { submitCurrentAnswer() }),
         modifier = Modifier
             .fillMaxWidth()
             .height(92.dp)
