@@ -366,14 +366,6 @@ private fun SetupScreen(model: PracticeViewModel) {
         topBar = { BackBar(model::goBack) },
     ) { padding ->
         if (model.isConfigurationLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
             return@Scaffold
         }
         Column(
@@ -447,7 +439,22 @@ private fun SetupScreen(model: PracticeViewModel) {
                     shape = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(7.dp),
                 ) {
-                    Text("?", fontSize = 23.sp)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            "?",
+                            modifier = Modifier.align(Alignment.Center),
+                            fontSize = 23.sp,
+                        )
+                        val trophyCount = trophyCountForErrors(model.wildcardScore())
+                        if (trophyCount > 0) {
+                            Text(
+                                text = "🏆".repeat(trophyCount),
+                                modifier = Modifier.align(Alignment.TopEnd),
+                                fontSize = 10.sp,
+                                lineHeight = 11.sp,
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.weight(1f))
             }
@@ -546,12 +553,6 @@ private fun AdditionSetupScreen(model: PracticeViewModel) {
         topBar = { BackBar(model::goBack) },
     ) { padding ->
         if (model.isConfigurationLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
             return@Scaffold
         }
         Column(
@@ -611,12 +612,6 @@ private fun SubtractionSetupScreen(model: PracticeViewModel) {
         topBar = { BackBar(model::goBack) },
     ) { padding ->
         if (model.isConfigurationLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
             return@Scaffold
         }
         Column(

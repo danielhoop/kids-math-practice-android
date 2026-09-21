@@ -288,6 +288,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         orderedNumbers = value
     }
 
+    fun wildcardScore(): Int? = scoresByFirstNumber[WILDCARD_SCORE_FIRST_NUMBER]
+
     fun configureTimer(minutes: Int) {
         require(minutes > 0)
         timerPreferenceLoadJob?.cancel()
@@ -401,8 +403,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             highestNumberError = "Choose at least 3 when excluding 1 and 10"
             return
         }
-        val baseNumbers = availableNumbers(operator)
-            .filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+        val baseNumbers = wildcardBaseNumbers(parsedHighestNumber)
         val secondNumbers = (1..parsedHighestNumber)
             .filterNot { withoutOneAndTen && (it == 1 || it == 10) }
         if (baseNumbers.isEmpty() || secondNumbers.isEmpty()) {
@@ -738,10 +739,11 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun saveScore() {
-        if (wildcardPractice || operator == MathOperator.ADDITION || operator == MathOperator.SUBTRACTION) return
-        scoresByFirstNumber = scoresByFirstNumber + (firstNumber to errorCount)
+        if (operator == MathOperator.ADDITION || operator == MathOperator.SUBTRACTION) return
+        val scoreFirstNumber = if (wildcardPractice) WILDCARD_SCORE_FIRST_NUMBER else firstNumber
+        scoresByFirstNumber = scoresByFirstNumber + (scoreFirstNumber to errorCount)
         scoreSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            configurationDatabase.saveScore(operator, firstNumber, errorCount)
+            configurationDatabase.saveScore(operator, scoreFirstNumber, errorCount)
         }
     }
 
@@ -801,6 +803,11 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         remainingTimerSeconds = ((remainingTimerMillis + 999L) / 1000L).toInt()
     }
 
+    private fun wildcardBaseNumbers(highestAllowedNumber: Int): List<Int> =
+        availableNumbers(operator)
+            .filter { it <= highestAllowedNumber }
+            .filterNot { withoutOneAndTen && (it == 1 || it == 10) }
+
     private fun advance() {
         calculationIndex++
 
@@ -827,9 +834,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             val reviewCalculations = if (wildcardPractice) {
                 PracticeEngine.wildcardFirstRoundCalculations(
                     operator = operator,
-                    baseNumbers = availableNumbers(operator).filterNot {
-                        withoutOneAndTen && (it == 1 || it == 10)
-                    },
+                    baseNumbers = wildcardBaseNumbers(highestNumber),
                     secondNumbers = reviewNumbers,
                     randomFirstSecond = randomFirstSecond,
                     roundSize = firstRoundLength,
@@ -875,6 +880,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private companion object {
+        const val WILDCARD_SCORE_FIRST_NUMBER = 0
         const val ACTIVE_INPUT_TIMEOUT_SECONDS = 30
         const val TIMER_TICK_MILLIS = 250L
     }
