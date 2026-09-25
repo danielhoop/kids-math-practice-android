@@ -129,6 +129,8 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
 @OptIn(ExperimentalLayoutApi::class)
 private fun OperatorScreen(model: PracticeViewModel) {
     var showTimerDialog by remember { mutableStateOf(false) }
+    var showReplaceClockConfirmation by remember { mutableStateOf(false) }
+    var replacementIsStopwatch by remember { mutableStateOf(false) }
     var showTimerHistoryDialog by remember { mutableStateOf(false) }
     var showSettingsPinDialog by remember { mutableStateOf(false) }
     var pinText by remember(showSettingsPinDialog) { mutableStateOf("") }
@@ -160,8 +162,20 @@ private fun OperatorScreen(model: PracticeViewModel) {
             }
         }
         Spacer(Modifier.height(34.dp))
-        Button(onClick = { showTimerDialog = true }) {
-            Text("⏱  Timer", fontSize = 21.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { showTimerDialog = true }) {
+                Text("⏲  Timer", fontSize = 21.sp)
+            }
+            Button(onClick = {
+                if (model.isPracticeClockActive) {
+                    replacementIsStopwatch = true
+                    showReplaceClockConfirmation = true
+                } else {
+                    model.configureStopwatch()
+                }
+            }) {
+                Text("⏱  Stopwatch", fontSize = 21.sp)
+            }
         }
         Spacer(Modifier.height(12.dp))
         Button(
@@ -281,6 +295,9 @@ private fun OperatorScreen(model: PracticeViewModel) {
                         val minutes = minutesText.toIntOrNull()
                         if (minutes == null || minutes !in 1..1440) {
                             timerError = "Enter a number from 1 to 1440"
+                        } else if (model.isPracticeClockActive) {
+                            replacementIsStopwatch = false
+                            showReplaceClockConfirmation = true
                         } else {
                             model.configureTimer(minutes)
                             showTimerDialog = false
@@ -292,6 +309,37 @@ private fun OperatorScreen(model: PracticeViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showTimerDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showReplaceClockConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showReplaceClockConfirmation = false },
+            containerColor = DefaultGray,
+            title = { Text("A timer or stopwatch is already active") },
+            text = { Text("Start a new one?") },
+            confirmButton = {
+                Button(onClick = {
+                    showReplaceClockConfirmation = false
+                    showTimerDialog = false
+                }) {
+                    Text("No, keep current one")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    if (replacementIsStopwatch) {
+                        model.configureStopwatch()
+                    } else {
+                        val minutes = minutesText.toIntOrNull() ?: return@TextButton
+                        model.configureTimer(minutes)
+                    }
+                    showReplaceClockConfirmation = false
+                    showTimerDialog = false
+                }) {
+                    Text(if (replacementIsStopwatch) "Start new stopwatch" else "Start new timer")
+                }
             },
         )
     }
@@ -677,7 +725,7 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 .padding(horizontal = 24.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text("Parental settings", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text("Educator settings", fontSize = 25.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(20.dp))
             Text("Addition", fontSize = 21.sp, fontWeight = FontWeight.Bold)
             OutlinedTextField(
@@ -826,6 +874,13 @@ private fun PracticeScreen(model: PracticeViewModel) {
                 if (model.timerIsArmed || model.showTimeUpDialog) {
                     Text(
                         "⏱ ${formatTimer(model.remainingTimerSeconds)}",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.DarkGray,
+                    )
+                } else if (model.stopwatchIsArmed) {
+                    Text(
+                        "⏲ ${formatTimer(model.elapsedStopwatchSeconds)}",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.DarkGray,

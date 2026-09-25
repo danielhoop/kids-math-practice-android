@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 
 enum class AppScreen { OPERATOR, SETUP, PRACTICE, RESULTS, SETTINGS }
 
+private const val ACTIVE_PRACTICE_CLOCK_TIMEOUT_SECONDS = 30
+
 class PracticeViewModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(AppScreen.OPERATOR)
         private set
@@ -57,6 +59,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var remainingTimerSeconds by mutableIntStateOf(30 * 60)
         private set
+    var stopwatchIsArmed by mutableStateOf(false)
+        private set
+    var elapsedStopwatchSeconds by mutableIntStateOf(0)
+        private set
+    val isPracticeClockActive: Boolean
+        get() = timerIsArmed || stopwatchIsArmed
     var showTimeUpDialog by mutableStateOf(false)
         private set
     var timerHistory by mutableStateOf<List<TimerHistoryEntry>>(emptyList())
@@ -108,10 +116,13 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private var scoreSaveJob: Job? = null
     private var timerPreferenceLoadJob: Job? = null
     private var timerHistorySaveJob: Job? = null
+    private var timerProgressSaveJob: Job? = null
     private var timerJob: Job? = null
     private var remainingTimerMillis = 30L * 60L * 1000L
+    private var elapsedStopwatchMillis = 0L
     private var activeUntilElapsedMillis = 0L
     private var lastTimerTickElapsedMillis = 0L
+    private var lastTimerProgressSaveElapsedMillis = 0L
     private var timedNumberOfCalculations = 0
     private var timedCorrectCalculations = 0
 
@@ -139,15 +150,24 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             settingsPinLoaded = true
         }
         timerPreferenceLoadJob = viewModelScope.launch {
-            val savedMinutes = withContext(Dispatchers.IO) {
-                configurationDatabase.loadTimerMinutes()
+            val (savedTimerProgress, savedStopwatchProgress) = withContext(Dispatchers.IO) {
+                configurationDatabase.loadTimerProgress() to
+                    configurationDatabase.loadStopwatchProgress()
             }
-            if (savedMinutes != null) {
-                timerMinutes = savedMinutes
-                if (!timerIsArmed) {
-                    remainingTimerMillis = savedMinutes * 60_000L
-                    updateDisplayedTimerSeconds()
+            if (savedTimerProgress != null) {
+                timerMinutes = savedTimerProgress.minutes
+                remainingTimerMillis = if (savedTimerProgress.isArmed) {
+                    savedTimerProgress.remainingMillis
+                } else {
+                    savedTimerProgress.minutes * 60_000L
                 }
+                timerIsArmed = savedTimerProgress.isArmed && remainingTimerMillis > 0L
+                updateDisplayedTimerSeconds()
+            }
+            if (!timerIsArmed && savedStopwatchProgress != null) {
+                elapsedStopwatchMillis = savedStopwatchProgress.elapsedMillis
+                stopwatchIsArmed = savedStopwatchProgress.isArmed
+                updateDisplayedStopwatchSeconds()
             }
         }
     }
@@ -294,27 +314,45 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         require(minutes > 0)
         timerPreferenceLoadJob?.cancel()
         timerJob?.cancel()
+        stopwatchIsArmed = false
+        saveStopwatchProgress()
         timerMinutes = minutes
         remainingTimerMillis = minutes * 60_000L
         updateDisplayedTimerSeconds()
         activeUntilElapsedMillis = 0L
         lastTimerTickElapsedMillis = SystemClock.elapsedRealtime()
+        lastTimerProgressSaveElapsedMillis = lastTimerTickElapsedMillis
         timerIsArmed = true
         showTimeUpDialog = false
         timedNumberOfCalculations = 0
         timedCorrectCalculations = 0
-        viewModelScope.launch(Dispatchers.IO) {
-            configurationDatabase.saveTimerMinutes(minutes)
-        }
+        saveTimerProgress()
+    }
+
+    fun configureStopwatch() {
+        timerPreferenceLoadJob?.cancel()
+        timerJob?.cancel()
+        timerIsArmed = false
+        activeUntilElapsedMillis = 0L
+        saveTimerProgress()
+        elapsedStopwatchMillis = 0L
+        updateDisplayedStopwatchSeconds()
+        lastTimerTickElapsedMillis = SystemClock.elapsedRealtime()
+        lastTimerProgressSaveElapsedMillis = lastTimerTickElapsedMillis
+        stopwatchIsArmed = true
+        showTimeUpDialog = false
+        timedNumberOfCalculations = 0
+        timedCorrectCalculations = 0
+        saveStopwatchProgress()
     }
 
     fun onAnswerDigitEntered() {
-        if (!timerIsArmed || remainingTimerMillis <= 0L) return
+        if (!isPracticeClockActive) return
         val now = SystemClock.elapsedRealtime()
         if (now < activeUntilElapsedMillis) return
-        consumeActiveTimerTime(now)
+        consumeActiveClockTime(now)
         lastTimerTickElapsedMillis = now
-        activeUntilElapsedMillis = now + ACTIVE_INPUT_TIMEOUT_SECONDS * 1000L
+        activeUntilElapsedMillis = now + ACTIVE_PRACTICE_CLOCK_TIMEOUT_SECONDS * 1000L
         ensureTimerJob()
     }
 
@@ -334,7 +372,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun pauseTimerForBackground() {
-        pauseTimerActivity()
+        pausePracticeClockActivity()
     }
 
     fun startPractice(chosenFirstNumber: Int) {
@@ -538,10 +576,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         if (wrongDialogCalculation != null || retryCalculation != null) return
         val calculation = currentCalculation ?: return
         val answer = answerText.toIntOrNull() ?: return
-        if (timerIsArmed) {
+        if (isPracticeClockActive) {
             timedNumberOfCalculations++
             if (answer == calculation.expectedAnswer) timedCorrectCalculations++
-            renewTimerActivityWindow()
+            renewPracticeClockActivityWindow()
         }
 
         if (answer == calculation.expectedAnswer) {
@@ -569,7 +607,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     fun submitRetryAnswer(answerText: String) {
         val calculation = retryCalculation ?: return
         val answer = answerText.toIntOrNull() ?: return
-        if (timerIsArmed) renewTimerActivityWindow()
+        if (isPracticeClockActive) renewPracticeClockActivityWindow()
         if (answer == calculation.expectedAnswer) {
             retryCalculation = null
             advance()
@@ -596,7 +634,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         showLeaveConfirmation = false
         retryCalculation = null
         wrongDialogCalculation = null
-        pauseTimerActivity()
+        pausePracticeClockActivity()
         screen = AppScreen.SETUP
     }
 
@@ -750,35 +788,41 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private fun ensureTimerJob() {
         if (timerJob?.isActive == true) return
         timerJob = viewModelScope.launch {
-            while (timerIsArmed) {
+            while (isPracticeClockActive) {
                 delay(TIMER_TICK_MILLIS)
                 val now = SystemClock.elapsedRealtime()
-                consumeActiveTimerTime(now)
-                if (!timerIsArmed || now >= activeUntilElapsedMillis) break
+                consumeActiveClockTime(now)
+                if (!isPracticeClockActive || now >= activeUntilElapsedMillis) break
             }
         }
     }
 
-    private fun renewTimerActivityWindow() {
-        if (!timerIsArmed || remainingTimerMillis <= 0L) return
+    private fun renewPracticeClockActivityWindow() {
+        if (!isPracticeClockActive) return
         val now = SystemClock.elapsedRealtime()
-        consumeActiveTimerTime(now)
-        if (!timerIsArmed) return
+        consumeActiveClockTime(now)
+        if (!isPracticeClockActive) return
         lastTimerTickElapsedMillis = now
-        activeUntilElapsedMillis = now + ACTIVE_INPUT_TIMEOUT_SECONDS * 1000L
+        activeUntilElapsedMillis = now + ACTIVE_PRACTICE_CLOCK_TIMEOUT_SECONDS * 1000L
         ensureTimerJob()
     }
 
-    private fun consumeActiveTimerTime(now: Long) {
+    private fun consumeActiveClockTime(now: Long) {
         if (activeUntilElapsedMillis <= lastTimerTickElapsedMillis) return
         val countedUntil = minOf(now, activeUntilElapsedMillis)
         val elapsed = (countedUntil - lastTimerTickElapsedMillis).coerceAtLeast(0L)
-        remainingTimerMillis = (remainingTimerMillis - elapsed).coerceAtLeast(0L)
         lastTimerTickElapsedMillis = now
-        updateDisplayedTimerSeconds()
-        if (remainingTimerMillis == 0L) {
+        if (timerIsArmed) {
+            remainingTimerMillis = (remainingTimerMillis - elapsed).coerceAtLeast(0L)
+            updateDisplayedTimerSeconds()
+        } else if (stopwatchIsArmed) {
+            elapsedStopwatchMillis += elapsed
+            updateDisplayedStopwatchSeconds()
+        }
+        if (timerIsArmed && remainingTimerMillis == 0L) {
             timerIsArmed = false
             activeUntilElapsedMillis = 0L
+            saveTimerProgress()
             showTimeUpDialog = true
             timerHistorySaveJob = viewModelScope.launch(Dispatchers.IO) {
                 configurationDatabase.saveTimerCompletion(
@@ -788,19 +832,46 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     numberOfCalculations = timedNumberOfCalculations,
                 )
             }
+        } else if (isPracticeClockActive &&
+            now - lastTimerProgressSaveElapsedMillis >= TIMER_PROGRESS_SAVE_MILLIS
+        ) {
+            if (timerIsArmed) saveTimerProgress() else saveStopwatchProgress()
+            lastTimerProgressSaveElapsedMillis = now
         }
     }
 
-    private fun pauseTimerActivity() {
-        if (!timerIsArmed) return
-        consumeActiveTimerTime(SystemClock.elapsedRealtime())
+    private fun pausePracticeClockActivity() {
+        if (!isPracticeClockActive) return
+        consumeActiveClockTime(SystemClock.elapsedRealtime())
         activeUntilElapsedMillis = 0L
         timerJob?.cancel()
         timerJob = null
+        if (timerIsArmed) saveTimerProgress() else saveStopwatchProgress()
+    }
+
+    private fun saveTimerProgress() {
+        val minutes = timerMinutes
+        val remainingMillis = remainingTimerMillis
+        val isArmed = timerIsArmed
+        timerProgressSaveJob = viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveTimerProgress(minutes, remainingMillis, isArmed)
+        }
+    }
+
+    private fun saveStopwatchProgress() {
+        val elapsedMillis = elapsedStopwatchMillis
+        val isArmed = stopwatchIsArmed
+        timerProgressSaveJob = viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveStopwatchProgress(elapsedMillis, isArmed)
+        }
     }
 
     private fun updateDisplayedTimerSeconds() {
         remainingTimerSeconds = ((remainingTimerMillis + 999L) / 1000L).toInt()
+    }
+
+    private fun updateDisplayedStopwatchSeconds() {
+        elapsedStopwatchSeconds = (elapsedStopwatchMillis / 1000L).toInt()
     }
 
     private fun wildcardBaseNumbers(highestAllowedNumber: Int): List<Int> =
@@ -869,7 +940,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
         if (calculationIndex >= calculations.size) {
             currentCalculation = null
-            pauseTimerActivity()
+            pausePracticeClockActivity()
             saveScore()
             screen = AppScreen.RESULTS
             return
@@ -881,7 +952,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     private companion object {
         const val WILDCARD_SCORE_FIRST_NUMBER = 0
-        const val ACTIVE_INPUT_TIMEOUT_SECONDS = 30
         const val TIMER_TICK_MILLIS = 250L
+        const val TIMER_PROGRESS_SAVE_MILLIS = 10_000L
     }
 }

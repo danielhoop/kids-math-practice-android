@@ -21,6 +21,17 @@ data class TimerHistoryEntry(
     val numberOfCalculations: Int,
 )
 
+data class TimerProgress(
+    val minutes: Int,
+    val remainingMillis: Long,
+    val isArmed: Boolean,
+)
+
+data class StopwatchProgress(
+    val elapsedMillis: Long,
+    val isArmed: Boolean,
+)
+
 data class AdditionConfiguration(
     val highestInput: Int?,
     val highestResult: Int?,
@@ -54,6 +65,7 @@ class ConfigurationDatabase(context: Context) :
         )
         createScoreTable(database)
         createTimerSettingsTable(database)
+        createStopwatchSettingsTable(database)
         createTimerHistoryTable(database)
         createSettingsTable(database)
         createNumberAvailabilityTable(database)
@@ -74,6 +86,8 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 10) addMinimumResultColumn(database)
         if (oldVersion < 11) createSubtractionConfigurationTable(database)
         if (oldVersion < 12) migrateSubtractionRestrictions(database)
+        if (oldVersion < 13) addTimerProgressColumns(database)
+        if (oldVersion < 14) createStopwatchSettingsTable(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -355,6 +369,21 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
+    fun saveTimerProgress(minutes: Int, remainingMillis: Long, isArmed: Boolean) {
+        val values = ContentValues().apply {
+            put(COLUMN_TIMER_ID, TIMER_ROW_ID)
+            put(COLUMN_TIMER_MINUTES, minutes)
+            put(COLUMN_TIMER_REMAINING_MILLIS, remainingMillis)
+            put(COLUMN_TIMER_IS_ARMED, isArmed)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_TIMER_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
     fun loadTimerMinutes(): Int? = readableDatabase.query(
         TABLE_TIMER_SETTINGS,
         arrayOf(COLUMN_TIMER_MINUTES),
@@ -369,6 +398,53 @@ class ConfigurationDatabase(context: Context) :
         } else {
             null
         }
+    }
+
+    fun loadTimerProgress(): TimerProgress? = readableDatabase.query(
+        TABLE_TIMER_SETTINGS,
+        arrayOf(COLUMN_TIMER_MINUTES, COLUMN_TIMER_REMAINING_MILLIS, COLUMN_TIMER_IS_ARMED),
+        "$COLUMN_TIMER_ID = ?",
+        arrayOf(TIMER_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        TimerProgress(
+            minutes = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_TIMER_MINUTES)),
+            remainingMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIMER_REMAINING_MILLIS)),
+            isArmed = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_TIMER_IS_ARMED)) != 0,
+        )
+    }
+
+    fun saveStopwatchProgress(elapsedMillis: Long, isArmed: Boolean) {
+        val values = ContentValues().apply {
+            put(COLUMN_STOPWATCH_ID, STOPWATCH_ROW_ID)
+            put(COLUMN_STOPWATCH_ELAPSED_MILLIS, elapsedMillis)
+            put(COLUMN_STOPWATCH_IS_ARMED, isArmed)
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_STOPWATCH_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadStopwatchProgress(): StopwatchProgress? = readableDatabase.query(
+        TABLE_STOPWATCH_SETTINGS,
+        arrayOf(COLUMN_STOPWATCH_ELAPSED_MILLIS, COLUMN_STOPWATCH_IS_ARMED),
+        "$COLUMN_STOPWATCH_ID = ?",
+        arrayOf(STOPWATCH_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        StopwatchProgress(
+            elapsedMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_STOPWATCH_ELAPSED_MILLIS)),
+            isArmed = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_STOPWATCH_IS_ARMED)) != 0,
+        )
     }
 
     fun saveTimerCompletion(
@@ -455,10 +531,27 @@ class ConfigurationDatabase(context: Context) :
             """
             CREATE TABLE IF NOT EXISTS $TABLE_TIMER_SETTINGS (
                 $COLUMN_TIMER_ID INTEGER PRIMARY KEY,
-                $COLUMN_TIMER_MINUTES INTEGER NOT NULL
+                $COLUMN_TIMER_MINUTES INTEGER NOT NULL,
+                $COLUMN_TIMER_REMAINING_MILLIS INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_TIMER_IS_ARMED INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
+    }
+
+    private fun addTimerProgressColumns(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_TIMER_SETTINGS, COLUMN_TIMER_REMAINING_MILLIS)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_TIMER_SETTINGS ADD COLUMN " +
+                    "$COLUMN_TIMER_REMAINING_MILLIS INTEGER NOT NULL DEFAULT 0",
+            )
+        }
+        if (!hasColumn(database, TABLE_TIMER_SETTINGS, COLUMN_TIMER_IS_ARMED)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_TIMER_SETTINGS ADD COLUMN " +
+                    "$COLUMN_TIMER_IS_ARMED INTEGER NOT NULL DEFAULT 0",
+            )
+        }
     }
 
     private fun createTimerHistoryTable(database: SQLiteDatabase) {
@@ -470,6 +563,18 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_DURATION_MINUTES INTEGER NOT NULL,
                 $COLUMN_CORRECT_CALCULATIONS INTEGER NOT NULL,
                 $COLUMN_NUMBER_OF_CALCULATIONS INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+    }
+
+    private fun createStopwatchSettingsTable(database: SQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_STOPWATCH_SETTINGS (
+                $COLUMN_STOPWATCH_ID INTEGER PRIMARY KEY,
+                $COLUMN_STOPWATCH_ELAPSED_MILLIS INTEGER NOT NULL,
+                $COLUMN_STOPWATCH_IS_ARMED INTEGER NOT NULL
             )
             """.trimIndent(),
         )
@@ -573,11 +678,12 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 12
+        const val DATABASE_VERSION = 14
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
         const val TABLE_TIMER_HISTORY = "timer_history"
+        const val TABLE_STOPWATCH_SETTINGS = "stopwatch_settings"
         const val TABLE_SETTINGS = "settings"
         const val TABLE_NUMBER_AVAILABILITY = "number_availability"
         const val TABLE_OPERATOR_SETTINGS = "operator_settings"
@@ -593,7 +699,13 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_ERROR_COUNT = "error_count"
         const val COLUMN_TIMER_ID = "id"
         const val COLUMN_TIMER_MINUTES = "minutes"
+        const val COLUMN_TIMER_REMAINING_MILLIS = "remaining_millis"
+        const val COLUMN_TIMER_IS_ARMED = "is_armed"
         const val TIMER_ROW_ID = 1
+        const val COLUMN_STOPWATCH_ID = "id"
+        const val COLUMN_STOPWATCH_ELAPSED_MILLIS = "elapsed_millis"
+        const val COLUMN_STOPWATCH_IS_ARMED = "is_armed"
+        const val STOPWATCH_ROW_ID = 1
         const val COLUMN_HISTORY_ID = "history_id"
         const val COLUMN_FINISHED_AT = "finished_at"
         const val COLUMN_DURATION_MINUTES = "duration_minutes"

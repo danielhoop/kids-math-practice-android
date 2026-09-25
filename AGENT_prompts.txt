@@ -492,3 +492,19 @@ Maximum result
   I cannot enter the number 9. It will just not show up in the result input field.
   I was able to enter the number 1.
   Identify the bug cause and fix it.
+
+-------------------------
+Few things to fix/improve
+* When the user sets a timer and closes the app, the timer progress is erased. This should not happen. Every 10 seconds, save the timer progress into the database. Upon app restart, read timer progress.
+* The "auto enter" settings is yet not saved and restored for the division case.
+* When the timer is running and the user wants to start another timer, i.e., the timer modal is opened and the user presses "Start timer" ask the user: A timer is already active. Start a new one? -> "Start new timer", "No, keep current timer" (primary choice)
+
+-------------------------
+› Aha, it was only because I did not start a calculation that division was not saved. So upon starting a set of
+  calculation it would have been saved...
+  If so, then roll back that change. We will handle it equally for all operators.
+
+-------------------------
+In addition to the timer, create a stop watch functionality. Place the stop watch button right to the timer button. Think about which icons we could use to distinguish the two. If you don't have a good idea, use the same icon.
+Add the same prompt asking to really start a new timer if it is already running. For both cases, timer and stop watch, do not differentiate if another timer or another stop watch is running. Check for both at the same time. And if a timer starts, but a stop watch is running, interrupt that stop watch. And the other way around.
+The rules when to keep counting are the same as for the timer. 30 seconds inactivity rule. Set that 30 seconds somewhere centrally in the application code so it is easy to maintain. Also save into the DB the stop watch progress every 10 seconds and load it upon app startup.
