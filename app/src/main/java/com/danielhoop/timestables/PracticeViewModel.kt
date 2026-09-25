@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 enum class AppScreen { OPERATOR, SETUP, PRACTICE, RESULTS, SETTINGS }
 
@@ -38,6 +39,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     var subtractionMinimumInputText by mutableStateOf("")
         private set
     var subtractionMaximumResultText by mutableStateOf("")
+        private set
+    var subtractionSettingsError by mutableStateOf<String?>(null)
         private set
     var randomFirstSecond by mutableStateOf(true)
         private set
@@ -92,6 +95,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     var settingsPin by mutableStateOf<String?>(null)
         private set
     var settingsPinLoaded by mutableStateOf(false)
+        private set
+    var selectedLanguageTag by mutableStateOf(defaultLanguageTag())
         private set
     var multiplicationNumbers by mutableStateOf((1..12).toSet())
         private set
@@ -148,6 +153,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             multiplicationShowHints = multiplicationHints
             divisionShowHints = divisionHints
             settingsPinLoaded = true
+        }
+        viewModelScope.launch {
+            val savedLanguage = withContext(Dispatchers.IO) { configurationDatabase.loadLanguage() }
+            savedLanguage?.takeIf { it in SUPPORTED_LANGUAGE_TAGS }?.let {
+                selectedLanguageTag = it
+            }
         }
         timerPreferenceLoadJob = viewModelScope.launch {
             val (savedTimerProgress, savedStopwatchProgress) = withContext(Dispatchers.IO) {
@@ -212,14 +223,26 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     fun updateSubtractionMinimumInput(value: String) {
         if (value.all(Char::isDigit)) {
             subtractionMinimumInputText = value
-            saveSubtractionConfiguration()
+            subtractionSettingsError = validateSubtractionRestrictions()
+            if (subtractionSettingsError == null) saveSubtractionConfiguration()
         }
     }
 
     fun updateSubtractionMaximumResult(value: String) {
         if (value.all(Char::isDigit)) {
             subtractionMaximumResultText = value
-            saveSubtractionConfiguration()
+            subtractionSettingsError = validateSubtractionRestrictions()
+            if (subtractionSettingsError == null) saveSubtractionConfiguration()
+        }
+    }
+
+    private fun validateSubtractionRestrictions(): String? {
+        val minimumInput = subtractionMinimumInputText.toIntOrNull()
+        val maximumResult = subtractionMaximumResultText.toIntOrNull()
+        return if (minimumInput != null && maximumResult != null && maximumResult >= minimumInput) {
+            getApplication<Application>().getString(R.string.maximum_result_less_than_minimum_input)
+        } else {
+            null
         }
     }
 
@@ -231,6 +254,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         settingsPin = pin
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.saveSettingsPin(pin)
+        }
+    }
+
+    fun updateLanguage(languageTag: String) {
+        require(languageTag in SUPPORTED_LANGUAGE_TAGS)
+        selectedLanguageTag = languageTag
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveLanguage(languageTag)
         }
     }
 
@@ -537,6 +568,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             highestNumberError = "Lowest result must be smaller than Highest input"
             return
         }
+        validateSubtractionRestrictions()?.let {
+            subtractionSettingsError = it
+            return
+        }
         if (minimumInput != null && highestInput < minimumInput) {
             highestNumberError = "Highest input must be at least $minimumInput"
             return
@@ -707,6 +742,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                 autoEnter = configuration.autoEnter
                 subtractionMinimumInputText = configuration.minimumInput?.toString() ?: ""
                 subtractionMaximumResultText = configuration.maximumResult?.toString() ?: ""
+                subtractionSettingsError = validateSubtractionRestrictions()
             }
             isConfigurationLoading = false
         }
@@ -951,8 +987,20 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     }
 
     private companion object {
+        val SUPPORTED_LANGUAGE_TAGS = setOf("en-US", "de-CH", "de-DE", "de-AT", "es-ES", "fr-FR", "it-IT", "nl-NL")
         const val WILDCARD_SCORE_FIRST_NUMBER = 0
         const val TIMER_TICK_MILLIS = 250L
         const val TIMER_PROGRESS_SAVE_MILLIS = 10_000L
     }
+}
+
+private fun defaultLanguageTag(): String = when {
+    Locale.getDefault().language == "es" -> "es-ES"
+    Locale.getDefault().language == "fr" -> "fr-FR"
+    Locale.getDefault().language == "it" -> "it-IT"
+    Locale.getDefault().language == "nl" -> "nl-NL"
+    Locale.getDefault().language != "de" -> "en-US"
+    Locale.getDefault().country == "CH" -> "de-CH"
+    Locale.getDefault().country == "AT" -> "de-AT"
+    else -> "de-DE"
 }

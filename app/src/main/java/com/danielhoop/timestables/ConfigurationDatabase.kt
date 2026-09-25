@@ -88,6 +88,7 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 12) migrateSubtractionRestrictions(database)
         if (oldVersion < 13) addTimerProgressColumns(database)
         if (oldVersion < 14) createStopwatchSettingsTable(database)
+        if (oldVersion < 15) addLanguageColumn(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -181,15 +182,18 @@ class ConfigurationDatabase(context: Context) :
 
     fun saveSettingsPin(pin: String) {
         val values = ContentValues().apply {
-            put(COLUMN_SETTINGS_ID, SETTINGS_ROW_ID)
             put(COLUMN_SETTINGS_PIN, pin)
         }
-        writableDatabase.insertWithOnConflict(
-            TABLE_SETTINGS,
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
+        if (writableDatabase.update(
+                TABLE_SETTINGS,
+                values,
+                "$COLUMN_SETTINGS_ID = ?",
+                arrayOf(SETTINGS_ROW_ID.toString()),
+            ) == 0
+        ) {
+            values.put(COLUMN_SETTINGS_ID, SETTINGS_ROW_ID)
+            writableDatabase.insertOrThrow(TABLE_SETTINGS, null, values)
+        }
     }
 
     fun loadSettingsPin(): String? = readableDatabase.query(
@@ -202,6 +206,28 @@ class ConfigurationDatabase(context: Context) :
         null,
     ).use { cursor ->
         if (cursor.moveToFirst()) cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SETTINGS_PIN)) else null
+    }
+
+    fun saveLanguage(languageTag: String) {
+        val values = ContentValues().apply { put(COLUMN_LANGUAGE_TAG, languageTag) }
+        writableDatabase.update(
+            TABLE_SETTINGS,
+            values,
+            "$COLUMN_SETTINGS_ID = ?",
+            arrayOf(SETTINGS_ROW_ID.toString()),
+        )
+    }
+
+    fun loadLanguage(): String? = readableDatabase.query(
+        TABLE_SETTINGS,
+        arrayOf(COLUMN_LANGUAGE_TAG),
+        "$COLUMN_SETTINGS_ID = ?",
+        arrayOf(SETTINGS_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
     }
 
     fun loadAvailableNumbers(operator: MathOperator): Set<Int> = readableDatabase.query(
@@ -598,10 +624,17 @@ class ConfigurationDatabase(context: Context) :
             """
             CREATE TABLE IF NOT EXISTS $TABLE_SETTINGS (
                 $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY,
-                $COLUMN_SETTINGS_PIN TEXT NOT NULL
+                $COLUMN_SETTINGS_PIN TEXT NOT NULL,
+                $COLUMN_LANGUAGE_TAG TEXT
             )
             """.trimIndent(),
         )
+    }
+
+    private fun addLanguageColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_SETTINGS, COLUMN_LANGUAGE_TAG)) {
+            database.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_LANGUAGE_TAG TEXT")
+        }
     }
 
     private fun createOperatorSettingsTable(database: SQLiteDatabase) {
@@ -678,7 +711,7 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 14
+        const val DATABASE_VERSION = 15
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -713,6 +746,7 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_NUMBER_OF_CALCULATIONS = "number_of_calculations"
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_SETTINGS_PIN = "pin"
+        const val COLUMN_LANGUAGE_TAG = "language_tag"
         const val COLUMN_NUMBER = "number"
         const val COLUMN_ENABLED = "enabled"
         const val COLUMN_SHOW_HINTS = "show_hints"

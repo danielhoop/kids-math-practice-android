@@ -2,7 +2,6 @@ package com.danielhoop.timestables
 
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -42,7 +41,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -56,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -63,6 +66,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -72,6 +76,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -84,7 +91,7 @@ private val Purple = Color(0xFF6352C7)
 private val ConfigurationLabelFontSize = 18.sp
 private const val AUTO_ENTER_VISIBILITY_MILLIS = 80L
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val practiceModel: PracticeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,6 +121,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
+    LaunchedEffect(model.selectedLanguageTag) {
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(model.selectedLanguageTag),
+        )
+    }
     BackHandler(enabled = model.screen != AppScreen.OPERATOR) { model.goBack() }
 
     when (model.screen) {
@@ -128,6 +140,7 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 private fun OperatorScreen(model: PracticeViewModel) {
+    val context = LocalContext.current
     var showTimerDialog by remember { mutableStateOf(false) }
     var showReplaceClockConfirmation by remember { mutableStateOf(false) }
     var replacementIsStopwatch by remember { mutableStateOf(false) }
@@ -143,7 +156,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
     var timerError by remember(showTimerDialog) { mutableStateOf<String?>(null) }
 
     GrayPage {
-        Text("What would you like to practice?", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.operator_prompt), fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(42.dp))
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -164,7 +177,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
         Spacer(Modifier.height(34.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { showTimerDialog = true }) {
-                Text("⏲  Timer", fontSize = 21.sp)
+                Text(stringResource(R.string.timer_button), fontSize = 21.sp)
             }
             Button(onClick = {
                 if (model.isPracticeClockActive) {
@@ -174,7 +187,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                     model.configureStopwatch()
                 }
             }) {
-                Text("⏱  Stopwatch", fontSize = 21.sp)
+                Text(stringResource(R.string.stopwatch_button), fontSize = 21.sp)
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -182,7 +195,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
             onClick = { showSettingsPinDialog = true },
             enabled = model.settingsPinLoaded,
         ) {
-            Text("\u2699  Settings", fontSize = 21.sp)
+            Text(stringResource(R.string.settings_button), fontSize = 21.sp)
         }
     }
 
@@ -191,7 +204,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
         AlertDialog(
             onDismissRequest = { showSettingsPinDialog = false },
             containerColor = DefaultGray,
-            title = { Text(if (creatingPin) "Create settings PIN" else "Settings PIN") },
+            title = { Text(stringResource(if (creatingPin) R.string.create_settings_pin else R.string.settings_pin)) },
             text = {
                 LaunchedEffect(Unit) {
                     delay(100)
@@ -210,7 +223,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                             }
                             pinError = null
                         },
-                        label = { Text(if (creatingPin) "PIN" else "Enter PIN") },
+                        label = { Text(stringResource(if (creatingPin) R.string.pin else R.string.enter_pin)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.focusRequester(pinFocusRequester),
@@ -223,7 +236,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                                 if (value.all(Char::isDigit)) repeatPinText = value
                                 pinError = null
                             },
-                            label = { Text("Repeat PIN") },
+                            label = { Text(stringResource(R.string.repeat_pin)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
@@ -235,18 +248,18 @@ private fun OperatorScreen(model: PracticeViewModel) {
             confirmButton = {
                 Button(onClick = {
                     when {
-                        pinText.isEmpty() -> pinError = "Enter a PIN"
-                        creatingPin && pinText != repeatPinText -> pinError = "The PINs do not match"
-                        !creatingPin && pinText != model.settingsPin -> pinError = "Incorrect PIN"
+                        pinText.isEmpty() -> pinError = context.getString(R.string.enter_pin_error)
+                        creatingPin && pinText != repeatPinText -> pinError = context.getString(R.string.pins_do_not_match)
+                        !creatingPin && pinText != model.settingsPin -> pinError = context.getString(R.string.incorrect_pin)
                         else -> {
                             if (creatingPin) model.saveSettingsPin(pinText)
                             showSettingsPinDialog = false
                             model.openSettings()
                         }
                     }
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.continue_label)) }
             },
-            dismissButton = { TextButton(onClick = { showSettingsPinDialog = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showSettingsPinDialog = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
@@ -260,7 +273,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("Practice timer", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.practice_timer), fontWeight = FontWeight.Bold)
                     TextButton(
                         onClick = {
                             showTimerDialog = false
@@ -268,7 +281,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                             model.loadTimerHistory()
                         },
                     ) {
-                        Text("History")
+                        Text(stringResource(R.string.history))
                     }
                 }
             },
@@ -279,7 +292,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                         if (value.all(Char::isDigit)) minutesText = value
                         timerError = null
                     },
-                    label = { Text("Minutes") },
+                    label = { Text(stringResource(R.string.minutes)) },
                     supportingText = { timerError?.let { Text(it) } },
                     isError = timerError != null,
                     singleLine = true,
@@ -294,7 +307,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                     onClick = {
                         val minutes = minutesText.toIntOrNull()
                         if (minutes == null || minutes !in 1..1440) {
-                            timerError = "Enter a number from 1 to 1440"
+                            timerError = context.getString(R.string.timer_minutes_error)
                         } else if (model.isPracticeClockActive) {
                             replacementIsStopwatch = false
                             showReplaceClockConfirmation = true
@@ -304,11 +317,11 @@ private fun OperatorScreen(model: PracticeViewModel) {
                         }
                     },
                 ) {
-                    Text("Start timer")
+                    Text(stringResource(R.string.start_timer))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTimerDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showTimerDialog = false }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -317,14 +330,14 @@ private fun OperatorScreen(model: PracticeViewModel) {
         AlertDialog(
             onDismissRequest = { showReplaceClockConfirmation = false },
             containerColor = DefaultGray,
-            title = { Text("A timer or stopwatch is already active") },
-            text = { Text("Start a new one?") },
+            title = { Text(stringResource(R.string.active_clock_title)) },
+            text = { Text(stringResource(R.string.start_new_question)) },
             confirmButton = {
                 Button(onClick = {
                     showReplaceClockConfirmation = false
                     showTimerDialog = false
                 }) {
-                    Text("No, keep current one")
+                    Text(stringResource(R.string.keep_current))
                 }
             },
             dismissButton = {
@@ -338,7 +351,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                     showReplaceClockConfirmation = false
                     showTimerDialog = false
                 }) {
-                    Text(if (replacementIsStopwatch) "Start new stopwatch" else "Start new timer")
+                    Text(stringResource(if (replacementIsStopwatch) R.string.start_new_stopwatch else R.string.start_new_timer))
                 }
             },
         )
@@ -348,7 +361,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
         AlertDialog(
             onDismissRequest = { showTimerHistoryDialog = false },
             containerColor = DefaultGray,
-            title = { Text("Timer history", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.timer_history), fontWeight = FontWeight.Bold) },
             text = {
                 when {
                     model.isTimerHistoryLoading -> Box(
@@ -360,7 +373,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                         CircularProgressIndicator()
                     }
 
-                    model.timerHistory.isEmpty() -> Text("No finished timers yet.")
+                    model.timerHistory.isEmpty() -> Text(stringResource(R.string.no_finished_timers))
                     else -> LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -383,7 +396,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
             confirmButton = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Button(onClick = { showTimerHistoryDialog = false }) {
-                        Text("Close")
+                        Text(stringResource(R.string.close))
                     }
                 }
             },
@@ -427,11 +440,11 @@ private fun SetupScreen(model: PracticeViewModel) {
         ) {
             Text(
                 text = when (model.operator) {
-                    MathOperator.ADDITION -> "Addition"
-                    MathOperator.SUBTRACTION -> "Subtraction"
-                    MathOperator.MULTIPLY -> "Multiplication"
-                    MathOperator.DIVIDE -> "Division"
-                    MathOperator.MIXED -> "Multiplication & Division (mixed)"
+                    MathOperator.ADDITION -> stringResource(R.string.addition)
+                    MathOperator.SUBTRACTION -> stringResource(R.string.subtraction)
+                    MathOperator.MULTIPLY -> stringResource(R.string.multiplication)
+                    MathOperator.DIVIDE -> stringResource(R.string.division)
+                    MathOperator.MIXED -> stringResource(R.string.mixed_setup_title)
                 },
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
@@ -510,7 +523,7 @@ private fun SetupScreen(model: PracticeViewModel) {
             OutlinedTextField(
                 value = model.highestNumberText,
                 onValueChange = model::updateHighestNumber,
-                label = { Text("Highest number") },
+                label = { Text(stringResource(R.string.highest_number)) },
                 supportingText = { model.highestNumberError?.let { Text(it) } },
                 isError = model.highestNumberError != null,
                 singleLine = true,
@@ -525,7 +538,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "1, 2, 3, ..., 10",
+                    stringResource(R.string.ordered_numbers),
                     fontSize = ConfigurationLabelFontSize,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -548,7 +561,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                             fontSize = ConfigurationLabelFontSize,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text("Swap number positions randomly", fontSize = 14.sp)
+                        Text(stringResource(R.string.swap_positions), fontSize = 14.sp)
                     }
                     Switch(
                         checked = model.randomFirstSecond,
@@ -564,7 +577,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "Without 1 and 10",
+                    stringResource(R.string.without_one_and_ten),
                     fontSize = ConfigurationLabelFontSize,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -581,7 +594,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "Auto enter",
+                    stringResource(R.string.auto_enter),
                     fontSize = ConfigurationLabelFontSize,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -612,12 +625,12 @@ private fun AdditionSetupScreen(model: PracticeViewModel) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Addition", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.addition), fontSize = 25.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 value = model.highestInputText,
                 onValueChange = model::updateHighestInput,
-                label = { Text("Highest input") },
+                label = { Text(stringResource(R.string.highest_input)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -626,7 +639,7 @@ private fun AdditionSetupScreen(model: PracticeViewModel) {
             OutlinedTextField(
                 value = model.highestResultText,
                 onValueChange = model::updateHighestResult,
-                label = { Text("Highest result") },
+                label = { Text(stringResource(R.string.highest_result)) },
                 supportingText = { model.highestNumberError?.let { Text(it) } },
                 isError = model.highestNumberError != null,
                 singleLine = true,
@@ -640,14 +653,14 @@ private fun AdditionSetupScreen(model: PracticeViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Auto enter", fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.auto_enter), fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
                 Switch(checked = model.autoEnter, onCheckedChange = model::updateAutoEnter)
             }
             Button(
                 onClick = model::startAdditionPractice,
                 modifier = Modifier.height(56.dp),
             ) {
-                Text("Start", fontSize = 19.sp)
+                Text(stringResource(R.string.start), fontSize = 19.sp)
             }
         }
     }
@@ -671,12 +684,12 @@ private fun SubtractionSetupScreen(model: PracticeViewModel) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Subtraction", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.subtraction), fontSize = 25.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 value = model.subtractionHighestInputText,
                 onValueChange = model::updateSubtractionHighestInput,
-                label = { Text("Highest input") },
+                label = { Text(stringResource(R.string.highest_input)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -685,7 +698,7 @@ private fun SubtractionSetupScreen(model: PracticeViewModel) {
             OutlinedTextField(
                 value = model.subtractionLowestResultText,
                 onValueChange = model::updateSubtractionLowestResult,
-                label = { Text("Lowest result") },
+                label = { Text(stringResource(R.string.lowest_result)) },
                 supportingText = { model.highestNumberError?.let { Text(it) } },
                 isError = model.highestNumberError != null,
                 singleLine = true,
@@ -699,21 +712,35 @@ private fun SubtractionSetupScreen(model: PracticeViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Auto enter", fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.auto_enter), fontSize = ConfigurationLabelFontSize, fontWeight = FontWeight.SemiBold)
                 Switch(checked = model.autoEnter, onCheckedChange = model::updateAutoEnter)
             }
             Button(
                 onClick = model::startSubtractionPractice,
                 modifier = Modifier.height(56.dp),
             ) {
-                Text("Start", fontSize = 19.sp)
+                Text(stringResource(R.string.start), fontSize = 19.sp)
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(model: PracticeViewModel) {
+    var languageMenuExpanded by remember { mutableStateOf(false) }
+    val selectedLanguage = stringResource(
+        when (model.selectedLanguageTag) {
+            "de-CH" -> R.string.language_german_ch
+            "de-DE" -> R.string.language_german_de
+            "de-AT" -> R.string.language_german_at
+            "es-ES" -> R.string.language_spanish
+            "fr-FR" -> R.string.language_french
+            "it-IT" -> R.string.language_italian
+            "nl-NL" -> R.string.language_dutch
+            else -> R.string.language_english_us
+        },
+    )
     Scaffold(
         containerColor = DefaultGray,
         topBar = { BackBar(model::goBack) },
@@ -725,23 +752,65 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 .padding(horizontal = 24.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text("Educator settings", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.educator_settings), fontSize = 25.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(20.dp))
-            Text("Addition", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            ExposedDropdownMenuBox(
+                expanded = languageMenuExpanded,
+                onExpandedChange = { languageMenuExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedLanguage,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(stringResource(R.string.language)) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(languageMenuExpanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                        .fillMaxWidth(),
+                )
+                ExposedDropdownMenu(
+                    expanded = languageMenuExpanded,
+                    onDismissRequest = { languageMenuExpanded = false },
+                ) {
+                    listOf("en-US", "de-CH", "de-DE", "de-AT", "es-ES", "fr-FR", "it-IT", "nl-NL").forEach { languageTag ->
+                        val label = stringResource(
+                            when (languageTag) {
+                                "de-CH" -> R.string.language_german_ch
+                                "de-DE" -> R.string.language_german_de
+                                "de-AT" -> R.string.language_german_at
+                                "es-ES" -> R.string.language_spanish
+                                "fr-FR" -> R.string.language_french
+                                "it-IT" -> R.string.language_italian
+                                "nl-NL" -> R.string.language_dutch
+                                else -> R.string.language_english_us
+                            },
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                languageMenuExpanded = false
+                                model.updateLanguage(languageTag)
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text(stringResource(R.string.addition), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = model.minimumResultText,
                 onValueChange = model::updateMinimumResult,
-                label = { Text("Minimum result") },
+                label = { Text(stringResource(R.string.minimum_result)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(24.dp))
-            Text("Subtraction", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.subtraction), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = model.subtractionMinimumInputText,
                 onValueChange = model::updateSubtractionMinimumInput,
-                label = { Text("Minimum input") },
+                label = { Text(stringResource(R.string.minimum_input)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -750,13 +819,15 @@ private fun SettingsScreen(model: PracticeViewModel) {
             OutlinedTextField(
                 value = model.subtractionMaximumResultText,
                 onValueChange = model::updateSubtractionMaximumResult,
-                label = { Text("Maximum result") },
+                label = { Text(stringResource(R.string.maximum_result)) },
+                supportingText = { model.subtractionSettingsError?.let { Text(it) } },
+                isError = model.subtractionSettingsError != null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(24.dp))
-            Text("Multiplication", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.multiplication), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             SettingsHintsSwitch(
                 enabled = model.multiplicationShowHints,
                 onEnabledChange = { model.updateShowHints(MathOperator.MULTIPLY, it) },
@@ -769,7 +840,7 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 )
             }
             Spacer(Modifier.height(24.dp))
-            Text("Division", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             SettingsHintsSwitch(
                 enabled = model.divisionShowHints,
                 onEnabledChange = { model.updateShowHints(MathOperator.DIVIDE, it) },
@@ -782,7 +853,7 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 )
             }
             Spacer(Modifier.height(24.dp))
-            Text("Mixed multiplication and division", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.mixed_multiplication_division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             (1..12).forEach { number ->
                 SettingsNumberRow(
                     number = number,
@@ -803,7 +874,7 @@ private fun SettingsHintsSwitch(enabled: Boolean, onEnabledChange: (Boolean) -> 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text("Show hints", fontSize = 19.sp)
+        Text(stringResource(R.string.show_hints), fontSize = 19.sp)
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
 }
@@ -946,7 +1017,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             confirmButton = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                     Button(onClick = { showHintDialog = false }) {
-                        Text("OK")
+                        Text(stringResource(R.string.ok))
                     }
                 }
             },
@@ -968,7 +1039,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             confirmButton = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Button(onClick = model::acknowledgeTimeUp) {
-                        Text("Yay! 😊", fontSize = 20.sp)
+                        Text(stringResource(R.string.yay), fontSize = 20.sp)
                     }
                 }
             },
@@ -977,15 +1048,15 @@ private fun PracticeScreen(model: PracticeViewModel) {
         AlertDialog(
             onDismissRequest = model::continuePractice,
             containerColor = DefaultGray,
-            title = { Text("Leave this set?", fontWeight = FontWeight.Bold) },
-            text = { Text("Your current progress in this set will be lost.") },
+            title = { Text(stringResource(R.string.leave_set), fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.leave_progress_warning)) },
             confirmButton = {
                 Button(onClick = model::continuePractice) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Continue")
+                        Text(stringResource(R.string.continue_label))
                         CalculatorIcon()
                     }
                 }
@@ -996,7 +1067,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Leave")
+                        Text(stringResource(R.string.leave))
                         DoorIcon()
                     }
                 }
@@ -1009,7 +1080,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             containerColor = DefaultGray,
             text = {
                 Text(
-                    "${wrongCalculation.expression} = ${wrongCalculation.expectedAnswer}",
+                    stringResource(R.string.correct_answer_format, wrongCalculation.expression, wrongCalculation.expectedAnswer),
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = 40.sp,
                     lineHeight = 48.sp,
@@ -1020,7 +1091,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             confirmButton = {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Button(onClick = model::acceptCorrectAnswer) {
-                        Text("OK 😊", fontSize = 18.sp)
+                        Text(stringResource(R.string.ok_smile), fontSize = 18.sp)
                     }
                 }
             },
@@ -1128,7 +1199,7 @@ private fun AnswerInput(
 private fun ResultsScreen(errorCount: Int, onContinue: () -> Unit) {
     val trophyCount = trophyCountForErrors(errorCount)
     GrayPage {
-        Text("Great work!", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.great_work), fontSize = 34.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(28.dp))
         Text(
             if (trophyCount > 0) List(trophyCount) { "🏆" }.joinToString(" ") else "😊",
@@ -1137,12 +1208,20 @@ private fun ResultsScreen(errorCount: Int, onContinue: () -> Unit) {
         )
         Spacer(Modifier.height(18.dp))
         Text(
-            if (errorCount == 0) "A perfect round!" else "$errorCount ${if (errorCount == 1) "mistake" else "mistakes"} this time",
+            if (errorCount == 0) {
+                stringResource(R.string.perfect_round)
+            } else {
+                stringResource(
+                    R.string.mistakes_format,
+                    errorCount,
+                    stringResource(if (errorCount == 1) R.string.mistake else R.string.mistakes),
+                )
+            },
             fontSize = 21.sp,
         )
         Spacer(Modifier.height(42.dp))
         Button(onClick = onContinue, modifier = Modifier.height(56.dp)) {
-            Text("Choose another table", fontSize = 19.sp)
+            Text(stringResource(R.string.choose_another_table), fontSize = 19.sp)
         }
     }
 }
@@ -1261,7 +1340,7 @@ private fun BackBar(onBack: () -> Unit, background: Color = DefaultGray) {
         contentAlignment = Alignment.CenterStart,
     ) {
         TextButton(onClick = onBack) {
-            Text("‹ Back", fontSize = 18.sp, color = Color(0xFF35268D))
+            Text(stringResource(R.string.back), fontSize = 18.sp, color = Color(0xFF35268D))
         }
     }
 }

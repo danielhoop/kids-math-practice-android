@@ -505,6 +505,13 @@ Few things to fix/improve
   If so, then roll back that change. We will handle it equally for all operators.
 
 -------------------------
-In addition to the timer, create a stop watch functionality. Place the stop watch button right to the timer button. Think about which icons we could use to distinguish the two. If you don't have a good idea, use the same icon.
-Add the same prompt asking to really start a new timer if it is already running. For both cases, timer and stop watch, do not differentiate if another timer or another stop watch is running. Check for both at the same time. And if a timer starts, but a stop watch is running, interrupt that stop watch. And the other way around.
-The rules when to keep counting are the same as for the timer. 30 seconds inactivity rule. Set that 30 seconds somewhere centrally in the application code so it is easy to maintain. Also save into the DB the stop watch progress every 10 seconds and load it upon app startup.
+› Implement a state of the art multilanguage setup for the app. Move all existing labels into a config file. Then,
+  create translations for all labels also for the Swiss German audience.
+  Functionality: The app reads from the OS the language at app initialization. However, add a "Language" section with a
+  drop down where the educator can choose manually from the supported languages. At the moment it's English (United
+  States) and Deutsch (Schweiz). Save the choice into the database and load on app startup.
+> Now create the files for de-DE and de-AT.
+> Now create the files for Spanish, Italian, French and Dutch
+
+-------------------------
+minimum_input and maximum_result in the parental settings have to be validated. If I enter the same number for both fields, or even a higher maximum_result, the app accepts it. I guess maximum_result must be smaller than minimum_input. Add it as a validator rule in the maximum_result field
