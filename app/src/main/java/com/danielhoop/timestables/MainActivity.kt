@@ -72,6 +72,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -856,6 +858,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
+            SettingsHintsSwitch(
+                label = R.string.highest_digits_hint_allowed,
+                enabled = model.additionHighestDigitsHintAllowed,
+                onEnabledChange = { model.updateHighestDigitsHintAllowed(MathOperator.ADDITION, it) },
+            )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.subtraction), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             OutlinedTextField(
@@ -877,6 +884,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
+            SettingsHintsSwitch(
+                label = R.string.highest_digits_hint_allowed,
+                enabled = model.subtractionHighestDigitsHintAllowed,
+                onEnabledChange = { model.updateHighestDigitsHintAllowed(MathOperator.SUBTRACTION, it) },
+            )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.multiplication), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             SettingsHintsSwitch(
@@ -890,6 +902,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
                     onEnabledChange = { model.updateNumberAvailability(MathOperator.MULTIPLY, number, it) },
                 )
             }
+            SettingsHintsSwitch(
+                label = R.string.highest_digits_hint_allowed,
+                enabled = model.multiplicationHighestDigitsHintAllowed,
+                onEnabledChange = { model.updateHighestDigitsHintAllowed(MathOperator.MULTIPLY, it) },
+            )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             SettingsHintsSwitch(
@@ -903,8 +920,18 @@ private fun SettingsScreen(model: PracticeViewModel) {
                     onEnabledChange = { model.updateNumberAvailability(MathOperator.DIVIDE, number, it) },
                 )
             }
+            SettingsHintsSwitch(
+                label = R.string.highest_digits_hint_allowed,
+                enabled = model.divisionHighestDigitsHintAllowed,
+                onEnabledChange = { model.updateHighestDigitsHintAllowed(MathOperator.DIVIDE, it) },
+            )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.mixed_multiplication_division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(R.string.mixed_hints_information),
+                modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+                fontSize = 16.sp,
+            )
             (1..12).forEach { number ->
                 SettingsNumberRow(
                     number = number,
@@ -917,7 +944,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
 }
 
 @Composable
-private fun SettingsHintsSwitch(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+private fun SettingsHintsSwitch(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    label: Int = R.string.show_hints,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -925,7 +956,7 @@ private fun SettingsHintsSwitch(enabled: Boolean, onEnabledChange: (Boolean) -> 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(stringResource(R.string.show_hints), fontSize = 19.sp)
+        Text(stringResource(label), fontSize = 19.sp)
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
 }
@@ -948,7 +979,9 @@ private fun SettingsNumberRow(number: Int, enabled: Boolean, onEnabledChange: (B
 private fun PracticeScreen(model: PracticeViewModel) {
     val calculation = model.currentCalculation ?: return
     val hintLines = if (model.showHintsFor(calculation)) calculation.hintLines() else null
+    val highestDigitsHint = model.highestDigitsHintFor(calculation)
     var showHintDialog by remember(model.calculationNumber) { mutableStateOf(false) }
+    var showHighestDigitsHint by remember(model.calculationNumber) { mutableStateOf(false) }
     var showGreen by remember { mutableStateOf(false) }
     val isWrong = model.wrongDialogCalculation != null
     val isBlockingDialog = isWrong || model.retryCalculation != null ||
@@ -1008,13 +1041,24 @@ private fun PracticeScreen(model: PracticeViewModel) {
                         color = Color.DarkGray,
                     )
                 }
-                if (hintLines != null && !isBlockingDialog) {
-                    TextButton(
-                        onClick = { showHintDialog = true },
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Text("?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Row {
+                    if (highestDigitsHint.isNotEmpty() && !showHighestDigitsHint && !isBlockingDialog) {
+                        TextButton(
+                            onClick = { showHighestDigitsHint = true },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Text("%", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (hintLines != null && !isBlockingDialog) {
+                        TextButton(
+                            onClick = { showHintDialog = true },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Text("?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -1031,6 +1075,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             AnswerInput(
                 questionNumber = model.calculationNumber,
                 expectedAnswer = calculation.expectedAnswer,
+                initialAnswer = if (showHighestDigitsHint) highestDigitsHint else "",
                 autoEnter = model.autoEnter,
                 enabled = !isBlockingDialog,
                 onDigitEntered = model::onAnswerDigitEntered,
@@ -1166,6 +1211,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
                     AnswerInput(
                         questionNumber = model.retryPromptSequence,
                         expectedAnswer = retryCalculation.expectedAnswer,
+                        initialAnswer = "",
                         autoEnter = model.autoEnter,
                         enabled = true,
                         onDigitEntered = model::onAnswerDigitEntered,
@@ -1182,24 +1228,27 @@ private fun PracticeScreen(model: PracticeViewModel) {
 private fun AnswerInput(
     questionNumber: Int,
     expectedAnswer: Int,
+    initialAnswer: String,
     autoEnter: Boolean,
     enabled: Boolean,
     onDigitEntered: () -> Unit,
     onSubmit: (String) -> Unit,
 ) {
-    var answer by remember(questionNumber) { mutableStateOf("") }
+    var answer by remember(questionNumber, initialAnswer) {
+        mutableStateOf(TextFieldValue(initialAnswer, selection = TextRange(initialAnswer.length)))
+    }
     var answerWasSubmitted by remember(questionNumber) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     fun submitCurrentAnswer() {
-        if (answer.isNotEmpty() && !answerWasSubmitted) {
+        if (answer.text.isNotEmpty() && !answerWasSubmitted) {
             answerWasSubmitted = true
-            onSubmit(answer)
+            onSubmit(answer.text)
         }
     }
 
-    LaunchedEffect(questionNumber) {
+    LaunchedEffect(questionNumber, initialAnswer) {
         delay(150)
         focusRequester.requestFocus()
         keyboardController?.show()
@@ -1211,7 +1260,7 @@ private fun AnswerInput(
     LaunchedEffect(autoEnter, answer, expectedAnswer) {
         if (autoEnter &&
             !answerWasSubmitted &&
-            answer.length == expectedAnswer.toString().length
+            answer.text.length == expectedAnswer.toString().length
         ) {
             delay(AUTO_ENTER_VISIBILITY_MILLIS)
             submitCurrentAnswer()
@@ -1221,8 +1270,8 @@ private fun AnswerInput(
     OutlinedTextField(
         value = answer,
         onValueChange = { value ->
-            if (value.all(Char::isDigit)) {
-                val digitWasAdded = value.length > answer.length
+            if (value.text.all(Char::isDigit)) {
+                val digitWasAdded = value.text.length > answer.text.length
                 answer = value
                 if (digitWasAdded) onDigitEntered()
             }

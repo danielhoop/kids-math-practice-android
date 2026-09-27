@@ -64,7 +64,8 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_RANDOM_FIRST_SECOND INTEGER NOT NULL,
                 $COLUMN_WITHOUT_ONE_AND_TEN INTEGER NOT NULL,
                 $COLUMN_AUTO_ENTER INTEGER NOT NULL,
-                $COLUMN_ORDERED_NUMBERS INTEGER NOT NULL
+                $COLUMN_ORDERED_NUMBERS INTEGER NOT NULL,
+                $COLUMN_HIGHEST_DIGITS_HINT INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -96,7 +97,8 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 15) addLanguageColumn(database)
         if (oldVersion < 16) addClockCalculationColumns(database)
         if (oldVersion < 17) addHistoryElapsedColumn(database)
-        if (oldVersion < 16) addClockCalculationColumns(database)
+        if (oldVersion < 18) addHighestDigitsHintColumns(database)
+        if (oldVersion < 19) addHighestDigitsHintAllowedColumn(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -297,6 +299,33 @@ class ConfigurationDatabase(context: Context) :
         val values = ContentValues().apply {
             put(COLUMN_OPERATOR, operator.name)
             put(COLUMN_SHOW_HINTS, showHints)
+            put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, loadHighestDigitsHintAllowed(operator))
+        }
+        writableDatabase.insertWithOnConflict(
+            TABLE_OPERATOR_SETTINGS,
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    fun loadHighestDigitsHintAllowed(operator: MathOperator): Boolean = readableDatabase.query(
+        TABLE_OPERATOR_SETTINGS,
+        arrayOf(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED),
+        "$COLUMN_OPERATOR = ?",
+        arrayOf(operator.name),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst()) cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED)) != 0 else true
+    }
+
+    fun saveHighestDigitsHintAllowed(operator: MathOperator, allowed: Boolean) {
+        val values = ContentValues().apply {
+            put(COLUMN_OPERATOR, operator.name)
+            put(COLUMN_SHOW_HINTS, loadShowHints(operator))
+            put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, allowed)
         }
         writableDatabase.insertWithOnConflict(
             TABLE_OPERATOR_SETTINGS,
@@ -713,7 +742,8 @@ class ConfigurationDatabase(context: Context) :
             """
             CREATE TABLE IF NOT EXISTS $TABLE_OPERATOR_SETTINGS (
                 $COLUMN_OPERATOR TEXT PRIMARY KEY,
-                $COLUMN_SHOW_HINTS INTEGER NOT NULL DEFAULT 1
+                $COLUMN_SHOW_HINTS INTEGER NOT NULL DEFAULT 1,
+                $COLUMN_HIGHEST_DIGITS_HINT_ALLOWED INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent(),
         )
@@ -727,7 +757,8 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_HIGHEST_INPUT INTEGER,
                 $COLUMN_HIGHEST_RESULT INTEGER,
                 $COLUMN_AUTO_ENTER INTEGER NOT NULL DEFAULT 0,
-                $COLUMN_MINIMUM_RESULT INTEGER NOT NULL DEFAULT 0
+                $COLUMN_MINIMUM_RESULT INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_HIGHEST_DIGITS_HINT INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -750,6 +781,7 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_HIGHEST_INPUT INTEGER,
                 $COLUMN_LOWEST_RESULT INTEGER,
                 $COLUMN_AUTO_ENTER INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_HIGHEST_DIGITS_HINT INTEGER NOT NULL DEFAULT 0,
                 $COLUMN_SUBTRACTION_MINIMUM_INPUT INTEGER,
                 $COLUMN_SUBTRACTION_MAXIMUM_RESULT INTEGER
             )
@@ -780,9 +812,28 @@ class ConfigurationDatabase(context: Context) :
         }
     }
 
+    private fun addHighestDigitsHintColumns(database: SQLiteDatabase) {
+        listOf(TABLE_CONFIGURATION, TABLE_ADDITION_CONFIGURATION, TABLE_SUBTRACTION_CONFIGURATION)
+            .filterNot { hasColumn(database, it, COLUMN_HIGHEST_DIGITS_HINT) }
+            .forEach { table ->
+                database.execSQL(
+                    "ALTER TABLE $table ADD COLUMN $COLUMN_HIGHEST_DIGITS_HINT INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+    }
+
+    private fun addHighestDigitsHintAllowedColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_OPERATOR_SETTINGS, COLUMN_HIGHEST_DIGITS_HINT_ALLOWED)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_OPERATOR_SETTINGS ADD COLUMN " +
+                    "$COLUMN_HIGHEST_DIGITS_HINT_ALLOWED INTEGER NOT NULL DEFAULT 1",
+            )
+        }
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 17
+        const val DATABASE_VERSION = 19
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -824,6 +875,8 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_NUMBER = "number"
         const val COLUMN_ENABLED = "enabled"
         const val COLUMN_SHOW_HINTS = "show_hints"
+        const val COLUMN_HIGHEST_DIGITS_HINT = "highest_digits_hint"
+        const val COLUMN_HIGHEST_DIGITS_HINT_ALLOWED = "highest_digits_hint_allowed"
         const val COLUMN_ADDITION_ID = "id"
         const val COLUMN_HIGHEST_INPUT = "highest_input"
         const val COLUMN_HIGHEST_RESULT = "highest_result"

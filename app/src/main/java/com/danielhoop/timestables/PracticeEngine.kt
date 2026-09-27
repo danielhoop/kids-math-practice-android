@@ -9,6 +9,9 @@ private const val HINT_SEPARATOR = "----------------"
 private val FIVE_BASED_HINT_TARGETS = setOf(4, 6, 7, 8)
 private val HintPriority = listOf(2, 6, 4, 9, 7, 3, 8)
 
+/** Returns every result digit except the final one, or no hint for a one-digit result. */
+fun Int.highestDigitsHint(): String = toString().dropLast(1)
+
 enum class MathOperator(val symbol: String) {
     ADDITION("+"),
     SUBTRACTION("-"),

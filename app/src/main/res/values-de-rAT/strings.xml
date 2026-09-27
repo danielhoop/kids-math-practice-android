@@ -46,6 +46,8 @@
     <string name="maximum_result">Höchstes Ergebnis</string>
     <string name="maximum_result_less_than_minimum_input">Das höchste Ergebnis muss kleiner als der Mindestwert Minuend sein</string>
     <string name="show_hints">Hinweise anzeigen</string>
+    <string name="highest_digits_hint_allowed">Hinweis für höchste Ziffern erlaubt</string>
+    <string name="mixed_hints_information">Um Hinweise ein- oder auszuschalten, verwende die entsprechenden Einstellungen für Multiplikation und/oder Division. Diese gelten auch für den gemischten Modus.</string>
     <string name="ok">OK</string>
     <string name="yay">Juhu! 😊</string>
     <string name="leave_set">Diese Übung verlassen?</string>

@@ -167,6 +167,13 @@ class PracticeEngineTest {
     }
 
     @Test
+    fun highestDigitsHintLeavesOnlyTheFinalDigitToEnter() {
+        assertEquals("", 5.highestDigitsHint())
+        assertEquals("1", 15.highestDigitsHint())
+        assertEquals("10", 108.highestDigitsHint())
+    }
+
+    @Test
     fun fourTableHintUsesFiveTimesThenSubtracts() {
         val lines = Calculation(MathOperator.MULTIPLY, 4, 10, false).hintLines()
 

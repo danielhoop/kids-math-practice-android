@@ -54,6 +54,8 @@
     <string name="maximum_result">Maximum result</string>
     <string name="maximum_result_less_than_minimum_input">Maximum result must be smaller than the minuend</string>
     <string name="show_hints">Show hints</string>
+    <string name="highest_digits_hint_allowed">Highest digits hint allowed</string>
+    <string name="mixed_hints_information">To turn hints on/off, use the dedicated settings for the multiplication and/or division mode. These will also be applied for the mixed mode.</string>
     <string name="ok">OK</string>
     <string name="yay">Yay! 😊</string>
     <string name="leave_set">Leave this set?</string>

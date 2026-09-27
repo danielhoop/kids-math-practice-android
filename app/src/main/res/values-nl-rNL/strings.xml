@@ -33,6 +33,8 @@
     <string name="educator_settings">Instellingen voor begeleiders</string>
     <string name="language">Taal</string>
     <string name="show_hints">Hints tonen</string>
+    <string name="highest_digits_hint_allowed">Hint voor hoogste cijfers toestaan</string>
+    <string name="mixed_hints_information">Gebruik de aparte instellingen voor vermenigvuldigen en/of delen om hints aan of uit te zetten. Deze worden ook toegepast op de gemengde modus.</string>
     <string name="ok">OK</string>
     <string name="leave_set">Deze oefening verlaten?</string>
     <string name="leave_progress_warning">Je huidige voortgang gaat verloren.</string>

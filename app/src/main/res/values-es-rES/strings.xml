@@ -33,6 +33,8 @@
     <string name="educator_settings">Ajustes del educador</string>
     <string name="language">Idioma</string>
     <string name="show_hints">Mostrar pistas</string>
+    <string name="highest_digits_hint_allowed">Permitir pista de cifras iniciales</string>
+    <string name="mixed_hints_information">Para activar o desactivar las pistas, usa los ajustes específicos del modo de multiplicación o división. También se aplicarán al modo combinado.</string>
     <string name="ok">OK</string>
     <string name="leave_set">¿Salir de esta práctica?</string>
     <string name="leave_progress_warning">Se perderá el progreso actual.</string>

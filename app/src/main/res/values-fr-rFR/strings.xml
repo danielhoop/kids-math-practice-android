@@ -33,6 +33,8 @@
     <string name="educator_settings">Paramètres de l’éducateur</string>
     <string name="language">Langue</string>
     <string name="show_hints">Afficher les indices</string>
+    <string name="highest_digits_hint_allowed">Autoriser l’indice des premiers chiffres</string>
+    <string name="mixed_hints_information">Pour activer ou désactiver les indices, utilisez les réglages dédiés au mode multiplication et/ou division. Ils s’appliquent aussi au mode mixte.</string>
     <string name="ok">OK</string>
     <string name="leave_set">Quitter cet exercice ?</string>
     <string name="leave_progress_warning">La progression actuelle sera perdue.</string>

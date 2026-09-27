@@ -108,6 +108,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var divisionShowHints by mutableStateOf(true)
         private set
+    var additionHighestDigitsHintAllowed by mutableStateOf(true)
+        private set
+    var subtractionHighestDigitsHintAllowed by mutableStateOf(true)
+        private set
+    var multiplicationHighestDigitsHintAllowed by mutableStateOf(true)
+        private set
+    var divisionHighestDigitsHintAllowed by mutableStateOf(true)
+        private set
 
     private var highestNumber = 10
     private var firstNumber = 1
@@ -140,9 +148,15 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     configurationDatabase.loadAvailableNumbers(MathOperator.DIVIDE),
                 )
             }
-            val (multiplicationHints, divisionHints) = withContext(Dispatchers.IO) {
-                configurationDatabase.loadShowHints(MathOperator.MULTIPLY) to
-                    configurationDatabase.loadShowHints(MathOperator.DIVIDE)
+            val hintSettings = withContext(Dispatchers.IO) {
+                listOf(
+                    configurationDatabase.loadHighestDigitsHintAllowed(MathOperator.ADDITION),
+                    configurationDatabase.loadHighestDigitsHintAllowed(MathOperator.SUBTRACTION),
+                    configurationDatabase.loadShowHints(MathOperator.MULTIPLY),
+                    configurationDatabase.loadShowHints(MathOperator.DIVIDE),
+                    configurationDatabase.loadHighestDigitsHintAllowed(MathOperator.MULTIPLY),
+                    configurationDatabase.loadHighestDigitsHintAllowed(MathOperator.DIVIDE),
+                )
             }
             settingsPin = pin
             multiplicationNumbers = multiplication
@@ -150,8 +164,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             mixedNumbers = withContext(Dispatchers.IO) {
                 configurationDatabase.loadAvailableNumbers(MathOperator.MIXED)
             }
-            multiplicationShowHints = multiplicationHints
-            divisionShowHints = divisionHints
+            additionHighestDigitsHintAllowed = hintSettings[0]
+            subtractionHighestDigitsHintAllowed = hintSettings[1]
+            multiplicationShowHints = hintSettings[2]
+            divisionShowHints = hintSettings[3]
+            multiplicationHighestDigitsHintAllowed = hintSettings[4]
+            divisionHighestDigitsHintAllowed = hintSettings[5]
             settingsPinLoaded = true
         }
         viewModelScope.launch {
@@ -337,6 +355,29 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     fun updateAutoEnter(value: Boolean) {
         autoEnter = value
+    }
+
+    fun highestDigitsHintFor(calculation: Calculation): String = if (
+        when (calculation.calculationOperator) {
+            MathOperator.ADDITION -> additionHighestDigitsHintAllowed
+            MathOperator.SUBTRACTION -> subtractionHighestDigitsHintAllowed
+            MathOperator.MULTIPLY -> multiplicationHighestDigitsHintAllowed
+            MathOperator.DIVIDE -> divisionHighestDigitsHintAllowed
+            MathOperator.MIXED -> false
+        }
+    ) calculation.expectedAnswer.highestDigitsHint() else ""
+
+    fun updateHighestDigitsHintAllowed(operator: MathOperator, allowed: Boolean) {
+        when (operator) {
+            MathOperator.ADDITION -> additionHighestDigitsHintAllowed = allowed
+            MathOperator.SUBTRACTION -> subtractionHighestDigitsHintAllowed = allowed
+            MathOperator.MULTIPLY -> multiplicationHighestDigitsHintAllowed = allowed
+            MathOperator.DIVIDE -> divisionHighestDigitsHintAllowed = allowed
+            MathOperator.MIXED -> return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveHighestDigitsHintAllowed(operator, allowed)
+        }
     }
 
     fun updateOrderedNumbers(value: Boolean) {

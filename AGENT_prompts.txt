@@ -538,3 +538,27 @@ Only save the current state of the timer / stopwatch if more than 1 second has p
 After the user has started a new stopwatch even though another was running (i.e., the second modal overlay was opened), return back to the home screen. Currently the app then returns back to the first stopwatch modal.
 
 -------------------------
+We will now improve the hint modes.
+In the educator/parental settings at the top of the mixed multiplication/division mode block, add a information text:
+"To turn hints on/off, use the dedicated settings for the multiplication and/or division mode. These will also be applied for the mixed mode.". Add all translations.
+
+For the multiplication mode, add a new hint mode for the student below the auto enter switch. It is called "Suggest highest digits in result". Add all translations.
+If this mode is enabled, the app will enter the highest digits of the result already in the input field. So the user has to enter only the one remaining digit.
+E.g.: 3 x 5 = 1  ->  The user enters 5 and gets 15.
+E.g.: 12 x 9 = 10 -> The user enters 8 and gets 108.
+If the result has only one digits, the app does not enter any digits in the result field.
+In the partental settings, add a new switch in the block "Multiplication" which is named: "Highest digits hint allowed".
+
+Implement this kind of hint for all modes: addition, subtraction, multipliation, division and mixed. But for the mixed case, do not create a separate parental setting. It is controlled via the multiplication and division setting as is the case for the normal hint mode. We have already added the information text. So nothing to do there.
+
+-------------------------
+Two things to improve:
+1. You need to add the parental switches also for the addition and division mode. Add it as the last configuration point per configuration block.
+2. When the app has entered the first digits, the cursor sits at the beginning (left) of the given digts. It has to be placed at the very right.
+
+-------------------------
+We will remodel this hint mode. Instead of having "Suggest highest digits in result" switches in the student screen, we remove this everywhere.
+Instead, we add in the top right corner of the calculation screen, where currently the "?" sits, a "%" button in the same style. If the user presses it, only then will the app fill the first digits into the result field. After this was done, then the curser will be placed in the result field at the very right.
+
+-------------------------
+I haven't been clear enogh. We need both, the "?" and the "%" button. Now you dropped the "?" button which wasn't my intent. They have to be side by side.

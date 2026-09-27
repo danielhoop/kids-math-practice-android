@@ -33,6 +33,8 @@
     <string name="educator_settings">Impostazioni dell’educatore</string>
     <string name="language">Lingua</string>
     <string name="show_hints">Mostra suggerimenti</string>
+    <string name="highest_digits_hint_allowed">Consenti suggerimento delle cifre iniziali</string>
+    <string name="mixed_hints_information">Per attivare o disattivare i suggerimenti, usa le impostazioni dedicate alla moltiplicazione e/o alla divisione. Verranno applicate anche alla modalità mista.</string>
     <string name="ok">OK</string>
     <string name="leave_set">Uscire da questo esercizio?</string>
     <string name="leave_progress_warning">I progressi attuali andranno persi.</string>
