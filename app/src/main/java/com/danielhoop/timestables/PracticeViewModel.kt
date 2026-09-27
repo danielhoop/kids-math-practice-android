@@ -98,6 +98,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var selectedLanguageTag by mutableStateOf(defaultLanguageTag())
         private set
+    var wrongAnswerRepeatCount by mutableIntStateOf(REPEAT_WRONG_NUMBER)
+        private set
+    var wrongAnswerRepeatCountText by mutableStateOf(REPEAT_WRONG_NUMBER.toString())
+        private set
     var multiplicationNumbers by mutableStateOf((1..12).toSet())
         private set
     var divisionNumbers by mutableStateOf((1..12).toSet())
@@ -126,6 +130,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private var calculationIndex = 0
     private var firstRoundLength = 0
     private val wrongSecondNumbers = mutableSetOf<Int>()
+    private val wrongWildcardCalculationKeys = mutableSetOf<Triple<MathOperator, Int, Int>>()
     private val configurationDatabase = ConfigurationDatabase(application)
     private var configurationLoadJob: Job? = null
     private var scoreSaveJob: Job? = null
@@ -182,10 +187,14 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             settingsPinLoaded = true
         }
         viewModelScope.launch {
-            val savedLanguage = withContext(Dispatchers.IO) { configurationDatabase.loadLanguage() }
+            val (savedLanguage, savedWrongAnswerRepeatCount) = withContext(Dispatchers.IO) {
+                configurationDatabase.loadLanguage() to configurationDatabase.loadWrongAnswerRepeatCount()
+            }
             savedLanguage?.takeIf { it in SUPPORTED_LANGUAGE_TAGS }?.let {
                 selectedLanguageTag = it
             }
+            wrongAnswerRepeatCount = savedWrongAnswerRepeatCount
+            wrongAnswerRepeatCountText = savedWrongAnswerRepeatCount.toString()
         }
         timerPreferenceLoadJob = viewModelScope.launch {
             val (savedTimerProgress, savedStopwatchProgress) = withContext(Dispatchers.IO) {
@@ -293,6 +302,18 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         selectedLanguageTag = languageTag
         viewModelScope.launch(Dispatchers.IO) {
             configurationDatabase.saveLanguage(languageTag)
+        }
+    }
+
+    fun updateWrongAnswerRepeatCount(value: String) {
+        if (value.isNotEmpty() && !value.all(Char::isDigit)) return
+        val repeatCount = value.toIntOrNull()
+        if (repeatCount != null && repeatCount !in MIN_REPEAT_WRONG_NUMBER..MAX_REPEAT_WRONG_NUMBER) return
+        wrongAnswerRepeatCountText = value
+        if (repeatCount == null) return
+        wrongAnswerRepeatCount = repeatCount
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveWrongAnswerRepeatCount(repeatCount)
         }
     }
 
@@ -492,6 +513,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         errorCount = 0
         correctFlashSequence = 0
         wrongSecondNumbers.clear()
+        wrongWildcardCalculationKeys.clear()
         wrongDialogCalculation = null
         retryCalculation = null
         showLeaveConfirmation = false
@@ -554,6 +576,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         errorCount = 0
         correctFlashSequence = 0
         wrongSecondNumbers.clear()
+        wrongWildcardCalculationKeys.clear()
         wrongDialogCalculation = null
         retryCalculation = null
         showLeaveConfirmation = false
@@ -606,6 +629,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         errorCount = 0
         correctFlashSequence = 0
         wrongSecondNumbers.clear()
+        wrongWildcardCalculationKeys.clear()
         wrongDialogCalculation = null
         retryCalculation = null
         showLeaveConfirmation = false
@@ -659,6 +683,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         errorCount = 0
         correctFlashSequence = 0
         wrongSecondNumbers.clear()
+        wrongWildcardCalculationKeys.clear()
         wrongDialogCalculation = null
         retryCalculation = null
         showLeaveConfirmation = false
@@ -689,6 +714,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         } else {
             errorCount++
             wrongSecondNumbers += calculation.secondNumber
+            if (wildcardPractice) wrongWildcardCalculationKeys += wildcardCalculationKey(calculation)
             if (operator != MathOperator.ADDITION && operator != MathOperator.SUBTRACTION &&
                 !forceSetLength && calculationIndex < firstRoundLength
             ) {
@@ -727,7 +753,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             AppScreen.OPERATOR -> Unit
             AppScreen.SETUP -> screen = AppScreen.OPERATOR
             AppScreen.PRACTICE, AppScreen.RESULTS -> screen = AppScreen.SETUP
-            AppScreen.SETTINGS -> screen = AppScreen.OPERATOR
+            AppScreen.SETTINGS -> {
+                wrongAnswerRepeatCountText = wrongAnswerRepeatCount.toString()
+                screen = AppScreen.OPERATOR
+            }
         }
     }
 
@@ -1044,6 +1073,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     previousSecondNumber = calculations.last().secondNumber,
                     keepSetLength = forceSetLength,
                     orderedNumbers = orderedNumbers,
+                    repeat = wrongAnswerRepeatCount,
                     roundSizeOverride = if (operator == MathOperator.MIXED || wildcardPractice) {
                         firstRoundLength
                     } else {
@@ -1058,22 +1088,11 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     secondNumbers = reviewNumbers,
                     randomFirstSecond = randomFirstSecond,
                     roundSize = firstRoundLength,
-                    excludedCalculations = if (wrongSecondNumbers.isEmpty()) {
-                        calculations.map { calculation ->
-                            val operation = calculation.calculationOperator
-                            if (operation == MathOperator.MULTIPLY) {
-                                Triple(
-                                    operation,
-                                    minOf(calculation.firstNumber, calculation.secondNumber),
-                                    maxOf(calculation.firstNumber, calculation.secondNumber),
-                                )
-                            } else {
-                                Triple(operation, calculation.firstNumber, calculation.secondNumber)
-                            }
-                        }.toSet()
-                    } else {
-                        emptySet()
-                    },
+                    excludedCalculations = calculations
+                        .filterNot { wildcardCalculationKey(it) in wrongWildcardCalculationKeys }
+                        .map { calculation ->
+                            wildcardCalculationKey(calculation)
+                        }.toSet(),
                 )
             } else {
                 PracticeEngine.calculations(
@@ -1105,6 +1124,19 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         const val TIMER_TICK_MILLIS = 250L
         const val TIMER_PROGRESS_SAVE_MILLIS = 10_000L
         const val MINIMUM_COMPLETED_CLOCK_MILLIS = 1_000L
+    }
+}
+
+private fun wildcardCalculationKey(calculation: Calculation): Triple<MathOperator, Int, Int> {
+    val operation = calculation.calculationOperator
+    return if (operation == MathOperator.MULTIPLY) {
+        Triple(
+            operation,
+            minOf(calculation.firstNumber, calculation.secondNumber),
+            maxOf(calculation.firstNumber, calculation.secondNumber),
+        )
+    } else {
+        Triple(operation, calculation.firstNumber, calculation.secondNumber)
     }
 }
 

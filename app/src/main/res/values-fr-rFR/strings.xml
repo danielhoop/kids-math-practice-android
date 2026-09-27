@@ -32,6 +32,9 @@
     <string name="start">Démarrer</string>
     <string name="educator_settings">Paramètres de l’éducateur</string>
     <string name="language">Langue</string>
+    <string name="repeat_erroneous_result_times">Répéter le résultat erroné ... fois</string>
+    <string name="sign">Signe</string>
+    <string name="change_pin">Modifier le PIN</string>
     <string name="show_hints">Afficher les indices</string>
     <string name="highest_digits_hint_allowed">Autoriser l’indice des premiers chiffres</string>
     <string name="mixed_hints_information">Pour activer ou désactiver les indices, utilisez les réglages dédiés au mode multiplication et/ou division. Ils s’appliquent aussi au mode mixte.</string>

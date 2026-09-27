@@ -32,6 +32,9 @@
     <string name="start">Iniciar</string>
     <string name="educator_settings">Ajustes del educador</string>
     <string name="language">Idioma</string>
+    <string name="repeat_erroneous_result_times">Repetir el resultado erróneo ... veces</string>
+    <string name="sign">Signo</string>
+    <string name="change_pin">Cambiar PIN</string>
     <string name="show_hints">Mostrar pistas</string>
     <string name="highest_digits_hint_allowed">Permitir pista de cifras iniciales</string>
     <string name="mixed_hints_information">Para activar o desactivar las pistas, usa los ajustes específicos del modo de multiplicación o división. También se aplicarán al modo combinado.</string>

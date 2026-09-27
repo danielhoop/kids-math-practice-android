@@ -100,6 +100,7 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 18) addHighestDigitsHintColumns(database)
         if (oldVersion < 19) addHighestDigitsHintAllowedColumn(database)
         if (oldVersion < 20) addDisplaySignColumn(database)
+        if (oldVersion < 21) addWrongAnswerRepeatColumn(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -240,6 +241,29 @@ class ConfigurationDatabase(context: Context) :
     ).use { cursor ->
         if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
     }
+
+    fun saveWrongAnswerRepeatCount(repeatCount: Int) {
+        require(repeatCount in MIN_REPEAT_WRONG_NUMBER..MAX_REPEAT_WRONG_NUMBER)
+        val values = ContentValues().apply { put(COLUMN_WRONG_ANSWER_REPEAT_COUNT, repeatCount) }
+        writableDatabase.update(
+            TABLE_SETTINGS,
+            values,
+            "$COLUMN_SETTINGS_ID = ?",
+            arrayOf(SETTINGS_ROW_ID.toString()),
+        )
+    }
+
+    fun loadWrongAnswerRepeatCount(): Int = readableDatabase.query(
+        TABLE_SETTINGS,
+        arrayOf(COLUMN_WRONG_ANSWER_REPEAT_COUNT),
+        "$COLUMN_SETTINGS_ID = ?",
+        arrayOf(SETTINGS_ROW_ID.toString()),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        if (cursor.moveToFirst()) cursor.getInt(0) else REPEAT_WRONG_NUMBER
+    }.coerceIn(MIN_REPEAT_WRONG_NUMBER, MAX_REPEAT_WRONG_NUMBER)
 
     fun loadAvailableNumbers(operator: MathOperator): Set<Int> = readableDatabase.query(
         TABLE_NUMBER_AVAILABILITY,
@@ -742,7 +766,8 @@ class ConfigurationDatabase(context: Context) :
             CREATE TABLE IF NOT EXISTS $TABLE_SETTINGS (
                 $COLUMN_SETTINGS_ID INTEGER PRIMARY KEY,
                 $COLUMN_SETTINGS_PIN TEXT NOT NULL,
-                $COLUMN_LANGUAGE_TAG TEXT
+                $COLUMN_LANGUAGE_TAG TEXT,
+                $COLUMN_WRONG_ANSWER_REPEAT_COUNT INTEGER NOT NULL DEFAULT $REPEAT_WRONG_NUMBER
             )
             """.trimIndent(),
         )
@@ -751,6 +776,12 @@ class ConfigurationDatabase(context: Context) :
     private fun addLanguageColumn(database: SQLiteDatabase) {
         if (!hasColumn(database, TABLE_SETTINGS, COLUMN_LANGUAGE_TAG)) {
             database.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_LANGUAGE_TAG TEXT")
+        }
+    }
+
+    private fun addWrongAnswerRepeatColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_SETTINGS, COLUMN_WRONG_ANSWER_REPEAT_COUNT)) {
+            database.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_WRONG_ANSWER_REPEAT_COUNT INTEGER NOT NULL DEFAULT $REPEAT_WRONG_NUMBER")
         }
     }
 
@@ -894,7 +925,7 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 20
+        const val DATABASE_VERSION = 21
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -933,6 +964,7 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_SETTINGS_PIN = "pin"
         const val COLUMN_LANGUAGE_TAG = "language_tag"
+        const val COLUMN_WRONG_ANSWER_REPEAT_COUNT = "wrong_answer_repeat_count"
         const val COLUMN_NUMBER = "number"
         const val COLUMN_ENABLED = "enabled"
         const val COLUMN_SHOW_HINTS = "show_hints"

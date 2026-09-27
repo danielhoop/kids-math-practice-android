@@ -791,6 +791,12 @@ private fun SubtractionSetupScreen(model: PracticeViewModel) {
 @Composable
 private fun SettingsScreen(model: PracticeViewModel) {
     var languageMenuExpanded by remember { mutableStateOf(false) }
+    var showChangePinDialog by remember { mutableStateOf(false) }
+    var newPinText by remember(showChangePinDialog) { mutableStateOf("") }
+    var repeatNewPinText by remember(showChangePinDialog) { mutableStateOf("") }
+    var changePinError by remember(showChangePinDialog) { mutableStateOf<String?>(null) }
+    val changePinFocusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
     val selectedLanguage = stringResource(
         when (model.selectedLanguageTag) {
             "de-CH" -> R.string.language_german_ch
@@ -858,6 +864,19 @@ private fun SettingsScreen(model: PracticeViewModel) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = model.wrongAnswerRepeatCountText,
+                onValueChange = model::updateWrongAnswerRepeatCount,
+                label = { Text(stringResource(R.string.repeat_erroneous_result_times)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { showChangePinDialog = true }) {
+                Text(stringResource(R.string.change_pin))
+            }
+            Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.addition), fontSize = 21.sp, fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = model.minimumResultText,
@@ -900,6 +919,7 @@ private fun SettingsScreen(model: PracticeViewModel) {
             )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.multiplication), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
             SignSelector(
                 signs = listOf("×", "·"),
                 selectedSign = model.displaySigns.multiplication,
@@ -923,6 +943,7 @@ private fun SettingsScreen(model: PracticeViewModel) {
             )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
             SignSelector(
                 signs = listOf("÷", ":", "/"),
                 selectedSign = model.displaySigns.division,
@@ -960,6 +981,63 @@ private fun SettingsScreen(model: PracticeViewModel) {
             }
         }
     }
+
+    if (showChangePinDialog) {
+        AlertDialog(
+            onDismissRequest = { showChangePinDialog = false },
+            containerColor = DefaultGray,
+            title = { Text(stringResource(R.string.create_settings_pin)) },
+            text = {
+                LaunchedEffect(Unit) {
+                    delay(100)
+                    changePinFocusRequester.requestFocus()
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newPinText,
+                        onValueChange = { value ->
+                            if (value.all(Char::isDigit)) newPinText = value
+                            changePinError = null
+                        },
+                        label = { Text(stringResource(R.string.pin)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.focusRequester(changePinFocusRequester),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = repeatNewPinText,
+                        onValueChange = { value ->
+                            if (value.all(Char::isDigit)) repeatNewPinText = value
+                            changePinError = null
+                        },
+                        label = { Text(stringResource(R.string.repeat_pin)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                    )
+                    changePinError?.let { Text(it, color = Color(0xFF9B2226)) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    when {
+                        newPinText.isEmpty() -> changePinError = context.getString(R.string.enter_pin_error)
+                        newPinText != repeatNewPinText -> changePinError = context.getString(R.string.pins_do_not_match)
+                        else -> {
+                            model.saveSettingsPin(newPinText)
+                            showChangePinDialog = false
+                        }
+                    }
+                }) { Text(stringResource(R.string.continue_label)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChangePinDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -968,7 +1046,7 @@ private fun SignSelector(
     selectedSign: String,
     onSignSelected: (String) -> Unit,
 ) {
-    Text("Sign", fontSize = 19.sp)
+    Text(stringResource(R.string.sign), fontSize = 19.sp)
     Spacer(Modifier.height(6.dp))
     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
         signs.forEachIndexed { index, sign ->

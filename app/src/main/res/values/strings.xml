@@ -41,6 +41,9 @@
     <string name="start">Start</string>
     <string name="educator_settings">Educator settings</string>
     <string name="language">Language</string>
+    <string name="repeat_erroneous_result_times">Repeat erroneous result ... times</string>
+    <string name="sign">Sign</string>
+    <string name="change_pin">Change PIN</string>
     <string name="language_english_us">English (United States)</string>
     <string name="language_german_ch">Deutsch (Schweiz)</string>
     <string name="language_german_de">Deutsch (Deutschland)</string>

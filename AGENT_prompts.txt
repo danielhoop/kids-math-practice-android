@@ -563,4 +563,14 @@ Instead, we add in the top right corner of the calculation screen, where current
 -------------------------
 We will now make the multiplication and division signs that the user sees adaptable by the educator.
 In the parental/educator settings for the multiplication block. As first configuration element, add a grouped switch (something like a radio button, but in a modern fashion). The label is "Sign". Allow the educator to choose from "×" (currently implemented, and default on app installation) or from "·". Save to the database. Read from database into RAM either on app startup or when settings screen is closed. Apply this sign to all app elements (instead of the currently hard-coded "×" sign.
+
 Do the same for the division element, but this time let the user choose between the signs: "÷" (default, left), ":" (middle), "/" (right)
+
+-------------------------
+In the wildard "?" mode, we have many many calculations to draw from. I am not sure how we implemented it for the second half of the set.
+Always try to get new calculations here. Do not repeat those from the first set except for the wrong ones that should be repeated three times.
+
+If you have ensured this, add a new setting in the educator setting. Right below the language. It should be called "Repeat erroneous result ... times". There, the default is 3. This input is an integer. It must be larger equal 0 and smaller equal 5. Throughout the app, replace the hard coded 3 in the error repetition logic with that number. Load it from the database into RAM on app startup or when the settings screen is closed.
+
+-------------------------
+Below "Repeat erroneous result ... times", add a new button called "Change PIN". Add all translations. If the user presses it, open the PIN initialization modal that we already have implemented. The workflow is exactly the same. When the modal is closed, go back to the parental/eudcator settings screen.

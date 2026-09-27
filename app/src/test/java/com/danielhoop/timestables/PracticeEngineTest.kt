@@ -451,6 +451,19 @@ class PracticeEngineTest {
         assertNoAdjacentDuplicates(reviewRound)
     }
 
+    @Test
+    fun reviewRoundAllowsZeroWrongAnswerRepeats() {
+        val reviewRound = PracticeEngine.reviewRoundNumbers(
+            highestNumber = 6,
+            wrongSecondNumbers = setOf(2, 3),
+            repeat = 0,
+            random = Random(102),
+        )
+
+        assertEquals(6, reviewRound.size)
+        assertNoAdjacentDuplicates(reviewRound)
+    }
+
     private fun assertNoAdjacentDuplicates(numbers: List<Int>) {
         assertTrue(numbers.zipWithNext().all { (first, second) -> first != second })
     }

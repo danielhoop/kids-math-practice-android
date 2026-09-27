@@ -41,6 +41,9 @@
     <string name="start">Starten</string>
     <string name="educator_settings">Einstellungen für Lehrpersonen</string>
     <string name="language">Sprache</string>
+    <string name="repeat_erroneous_result_times">Fehlerhaftes Ergebnis ... mal wiederholen</string>
+    <string name="sign">Zeichen</string>
+    <string name="change_pin">PIN ändern</string>
     <string name="minimum_result">Kleinstes Ergebnis</string>
     <string name="minimum_input">Mindestwert Minuend (linke Zahl in der Berechnung)</string>
     <string name="maximum_result">Höchstes Ergebnis</string>

@@ -4,6 +4,8 @@ import kotlin.math.min
 import kotlin.random.Random
 
 const val REPEAT_WRONG_NUMBER = 3
+const val MIN_REPEAT_WRONG_NUMBER = 0
+const val MAX_REPEAT_WRONG_NUMBER = 5
 const val forceSetLength = false
 private const val HINT_SEPARATOR = "----------------"
 private val FIVE_BASED_HINT_TARGETS = setOf(4, 6, 7, 8)
@@ -244,7 +246,7 @@ object PracticeEngine {
         roundSizeOverride: Int? = null,
     ): List<Int> {
         require(highestNumber > 0)
-        require(repeat > 0)
+        require(repeat in MIN_REPEAT_WRONG_NUMBER..MAX_REPEAT_WRONG_NUMBER)
 
         val allNumbers = allowedNumbers(highestNumber, withoutOneAndTen)
         require(allNumbers.isNotEmpty())
@@ -257,6 +259,22 @@ object PracticeEngine {
         }
         // A number can occupy at most every other position without touching itself.
         val safeRepeat = min(repeat, (roundSize + 1) / 2)
+        if (safeRepeat == 0) {
+            if (orderedNumbers) {
+                return List(roundSize) { index -> allNumbers[index % allNumbers.size] }
+            }
+            return arrangeWithoutAdjacentDuplicates(
+                numbers = fillRound(
+                    requiredNumbers = allNumbers.shuffled(random),
+                    fillNumbers = allNumbers,
+                    size = roundSize,
+                    random = random,
+                ),
+                random = random,
+                forbiddenFirstNumber = previousSecondNumber,
+                fallbackNumbers = allNumbers,
+            )
+        }
         val maximumImportant = roundSize / safeRepeat
         val importantNumbers = validWrongNumbers
             .let { numbers -> if (orderedNumbers) numbers.sorted() else numbers.shuffled(random) }

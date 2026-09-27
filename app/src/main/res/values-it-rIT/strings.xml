@@ -32,6 +32,9 @@
     <string name="start">Avvia</string>
     <string name="educator_settings">Impostazioni dell’educatore</string>
     <string name="language">Lingua</string>
+    <string name="repeat_erroneous_result_times">Ripetere il risultato errato ... volte</string>
+    <string name="sign">Segno</string>
+    <string name="change_pin">Cambia PIN</string>
     <string name="show_hints">Mostra suggerimenti</string>
     <string name="highest_digits_hint_allowed">Consenti suggerimento delle cifre iniziali</string>
     <string name="mixed_hints_information">Per attivare o disattivare i suggerimenti, usa le impostazioni dedicate alla moltiplicazione e/o alla divisione. Verranno applicate anche alla modalità mista.</string>
