@@ -574,3 +574,6 @@ If you have ensured this, add a new setting in the educator setting. Right below
 
 -------------------------
 Below "Repeat erroneous result ... times", add a new button called "Change PIN". Add all translations. If the user presses it, open the PIN initialization modal that we already have implemented. The workflow is exactly the same. When the modal is closed, go back to the parental/eudcator settings screen.
+
+-------------------------
+Analyze AGENTS.md and README.md and update them if necessary. You can check in the git history when we have changed AGENTS.md the last time. Then look at all code changes that were made since then and adapt AGENTS.md (and potentially README.md) accordingly.
