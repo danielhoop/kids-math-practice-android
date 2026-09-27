@@ -173,11 +173,15 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     savedTimerProgress.minutes * 60_000L
                 }
                 timerIsArmed = savedTimerProgress.isArmed && remainingTimerMillis > 0L
+                timedNumberOfCalculations = savedTimerProgress.numberOfCalculations
+                timedCorrectCalculations = savedTimerProgress.correctCalculations
                 updateDisplayedTimerSeconds()
             }
             if (!timerIsArmed && savedStopwatchProgress != null) {
                 elapsedStopwatchMillis = savedStopwatchProgress.elapsedMillis
                 stopwatchIsArmed = savedStopwatchProgress.isArmed
+                timedNumberOfCalculations = savedStopwatchProgress.numberOfCalculations
+                timedCorrectCalculations = savedStopwatchProgress.correctCalculations
                 updateDisplayedStopwatchSeconds()
             }
         }
@@ -344,9 +348,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     fun configureTimer(minutes: Int) {
         require(minutes > 0)
         timerPreferenceLoadJob?.cancel()
+        finishActiveClock()
         timerJob?.cancel()
-        stopwatchIsArmed = false
-        saveStopwatchProgress()
         timerMinutes = minutes
         remainingTimerMillis = minutes * 60_000L
         updateDisplayedTimerSeconds()
@@ -362,10 +365,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
 
     fun configureStopwatch() {
         timerPreferenceLoadJob?.cancel()
+        finishActiveClock()
         timerJob?.cancel()
-        timerIsArmed = false
-        activeUntilElapsedMillis = 0L
-        saveTimerProgress()
         elapsedStopwatchMillis = 0L
         updateDisplayedStopwatchSeconds()
         lastTimerTickElapsedMillis = SystemClock.elapsedRealtime()
@@ -375,6 +376,10 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         timedNumberOfCalculations = 0
         timedCorrectCalculations = 0
         saveStopwatchProgress()
+    }
+
+    fun stopStopwatch() {
+        if (stopwatchIsArmed) finishActiveClock()
     }
 
     fun onAnswerDigitEntered() {
@@ -860,12 +865,15 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             activeUntilElapsedMillis = 0L
             saveTimerProgress()
             showTimeUpDialog = true
+            val completedCorrectCalculations = timedCorrectCalculations
+            val completedNumberOfCalculations = timedNumberOfCalculations
             timerHistorySaveJob = viewModelScope.launch(Dispatchers.IO) {
                 configurationDatabase.saveTimerCompletion(
                     finishedAtMillis = System.currentTimeMillis(),
                     durationMinutes = timerMinutes,
-                    correctCalculations = timedCorrectCalculations,
-                    numberOfCalculations = timedNumberOfCalculations,
+                    correctCalculations = completedCorrectCalculations,
+                    numberOfCalculations = completedNumberOfCalculations,
+                    elapsedMillis = timerMinutes * 60_000L,
                 )
             }
         } else if (isPracticeClockActive &&
@@ -885,20 +893,64 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         if (timerIsArmed) saveTimerProgress() else saveStopwatchProgress()
     }
 
+    private fun finishActiveClock() {
+        if (!isPracticeClockActive) return
+        consumeActiveClockTime(SystemClock.elapsedRealtime())
+        val wasTimer = timerIsArmed
+        val elapsedMillis = if (wasTimer) {
+            timerMinutes * 60_000L - remainingTimerMillis
+        } else {
+            elapsedStopwatchMillis
+        }.coerceAtLeast(0L)
+        val completedCorrectCalculations = timedCorrectCalculations
+        val completedNumberOfCalculations = timedNumberOfCalculations
+        timerIsArmed = false
+        stopwatchIsArmed = false
+        activeUntilElapsedMillis = 0L
+        timerJob?.cancel()
+        timerJob = null
+        if (wasTimer) saveTimerProgress() else saveStopwatchProgress()
+        if (elapsedMillis <= MINIMUM_COMPLETED_CLOCK_MILLIS) return
+        timerHistorySaveJob = viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveTimerCompletion(
+                finishedAtMillis = System.currentTimeMillis(),
+                durationMinutes = (elapsedMillis / 60_000L).toInt(),
+                correctCalculations = completedCorrectCalculations,
+                numberOfCalculations = completedNumberOfCalculations,
+                elapsedMillis = elapsedMillis,
+            )
+        }
+    }
+
     private fun saveTimerProgress() {
         val minutes = timerMinutes
         val remainingMillis = remainingTimerMillis
         val isArmed = timerIsArmed
+        val numberOfCalculations = timedNumberOfCalculations
+        val correctCalculations = timedCorrectCalculations
         timerProgressSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            configurationDatabase.saveTimerProgress(minutes, remainingMillis, isArmed)
+            configurationDatabase.saveTimerProgress(
+                minutes = minutes,
+                remainingMillis = remainingMillis,
+                isArmed = isArmed,
+                numberOfCalculations = numberOfCalculations,
+                correctCalculations = correctCalculations,
+            )
         }
     }
 
     private fun saveStopwatchProgress() {
         val elapsedMillis = elapsedStopwatchMillis
         val isArmed = stopwatchIsArmed
+        val numberOfCalculations = timedNumberOfCalculations
+        val correctCalculations = timedCorrectCalculations
         timerProgressSaveJob = viewModelScope.launch(Dispatchers.IO) {
-            configurationDatabase.saveStopwatchProgress(elapsedMillis, isArmed)
+            configurationDatabase.saveStopwatchProgress(
+                elapsedMillis = elapsedMillis,
+                isArmed = isArmed,
+                numberOfCalculations = numberOfCalculations,
+                correctCalculations = correctCalculations,
+            )
         }
     }
 
@@ -991,6 +1043,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         const val WILDCARD_SCORE_FIRST_NUMBER = 0
         const val TIMER_TICK_MILLIS = 250L
         const val TIMER_PROGRESS_SAVE_MILLIS = 10_000L
+        const val MINIMUM_COMPLETED_CLOCK_MILLIS = 1_000L
     }
 }
 

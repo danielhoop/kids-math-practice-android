@@ -14,7 +14,7 @@
     <string name="start_new_question">Een nieuwe starten?</string>
     <string name="keep_current">Nee, huidige behouden</string>
     <string name="start_new_timer">Nieuwe timer starten</string>
-    <string name="start_new_stopwatch">Nieuwe stopwatch starten</string>
+    <string name="start_new_stopwatch">Stopwatch starten</string>
     <string name="timer_history">Timergeschiedenis</string>
     <string name="no_finished_timers">Nog geen timers voltooid.</string>
     <string name="close">Sluiten</string>

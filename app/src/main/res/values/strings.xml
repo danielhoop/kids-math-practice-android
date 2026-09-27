@@ -19,7 +19,8 @@
     <string name="start_new_question">Start a new one?</string>
     <string name="keep_current">No, keep current one</string>
     <string name="start_new_timer">Start new timer</string>
-    <string name="start_new_stopwatch">Start new stopwatch</string>
+    <string name="start_new_stopwatch">Start stopwatch</string>
+    <string name="stop_stopwatch">Stop stopwatch</string>
     <string name="timer_history">Timer history</string>
     <string name="no_finished_timers">No finished timers yet.</string>
     <string name="close">Close</string>

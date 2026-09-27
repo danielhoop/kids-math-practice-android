@@ -14,7 +14,7 @@
     <string name="start_new_question">Avviarne uno nuovo?</string>
     <string name="keep_current">No, mantieni quello attuale</string>
     <string name="start_new_timer">Avvia nuovo timer</string>
-    <string name="start_new_stopwatch">Avvia nuovo cronometro</string>
+    <string name="start_new_stopwatch">Avvia cronometro</string>
     <string name="timer_history">Cronologia timer</string>
     <string name="no_finished_timers">Nessun timer terminato.</string>
     <string name="close">Chiudi</string>

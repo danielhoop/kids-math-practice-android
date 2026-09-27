@@ -14,7 +14,7 @@
     <string name="start_new_question">¿Iniciar uno nuevo?</string>
     <string name="keep_current">No, mantener el actual</string>
     <string name="start_new_timer">Iniciar nuevo temporizador</string>
-    <string name="start_new_stopwatch">Iniciar nuevo cronómetro</string>
+    <string name="start_new_stopwatch">Iniciar cronómetro</string>
     <string name="timer_history">Historial del temporizador</string>
     <string name="no_finished_timers">Aún no hay temporizadores terminados.</string>
     <string name="close">Cerrar</string>

@@ -515,3 +515,26 @@ Few things to fix/improve
 
 -------------------------
 minimum_input and maximum_result in the parental settings have to be validated. If I enter the same number for both fields, or even a higher maximum_result, the app accepts it. I guess maximum_result must be smaller than minimum_input. Add it as a validator rule in the maximum_result field
+
+-------------------------
+Quickly check whether the timer and the stopwatch are saved regulary to the DB.
+In addition, persist the number of done calculations (and the number of right/wrong ones) instead of just keeping it in the RAM
+
+-------------------------
+If the user wants to start a new timer or a new stopwatch and decides to discard the running one, save the current state of the running timer/stopwatch into the DB as completed. But only until the current time.
+E.g., 30 minutes timer was set and 16:45 have passed, save 16:45 with the current score.
+The same for the stopwatch: Save the passed time and the current score as completed.
+In addition, for the stopwatch add a button in the modal to stop the stopwatch and save it to the DB now.
+
+-------------------------
+Replace the text "Stoppuhr stoppen" with "Stoppuhr anhalten" in all German variants.
+Also, implement a history button the same way as it is available in the timer case.
+You may need to persist the score also for the stopwatch case, if you're not yet doing it.
+
+-------------------------
+Only save the current state of the timer / stopwatch if more than 1 second has passed.
+
+-------------------------
+After the user has started a new stopwatch even though another was running (i.e., the second modal overlay was opened), return back to the home screen. Currently the app then returns back to the first stopwatch modal.
+
+-------------------------

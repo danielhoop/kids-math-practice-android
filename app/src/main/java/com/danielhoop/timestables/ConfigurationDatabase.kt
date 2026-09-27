@@ -19,17 +19,22 @@ data class TimerHistoryEntry(
     val durationMinutes: Int,
     val correctCalculations: Int,
     val numberOfCalculations: Int,
+    val elapsedMillis: Long,
 )
 
 data class TimerProgress(
     val minutes: Int,
     val remainingMillis: Long,
     val isArmed: Boolean,
+    val numberOfCalculations: Int,
+    val correctCalculations: Int,
 )
 
 data class StopwatchProgress(
     val elapsedMillis: Long,
     val isArmed: Boolean,
+    val numberOfCalculations: Int,
+    val correctCalculations: Int,
 )
 
 data class AdditionConfiguration(
@@ -89,6 +94,9 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 13) addTimerProgressColumns(database)
         if (oldVersion < 14) createStopwatchSettingsTable(database)
         if (oldVersion < 15) addLanguageColumn(database)
+        if (oldVersion < 16) addClockCalculationColumns(database)
+        if (oldVersion < 17) addHistoryElapsedColumn(database)
+        if (oldVersion < 16) addClockCalculationColumns(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -395,12 +403,20 @@ class ConfigurationDatabase(context: Context) :
         )
     }
 
-    fun saveTimerProgress(minutes: Int, remainingMillis: Long, isArmed: Boolean) {
+    fun saveTimerProgress(
+        minutes: Int,
+        remainingMillis: Long,
+        isArmed: Boolean,
+        numberOfCalculations: Int,
+        correctCalculations: Int,
+    ) {
         val values = ContentValues().apply {
             put(COLUMN_TIMER_ID, TIMER_ROW_ID)
             put(COLUMN_TIMER_MINUTES, minutes)
             put(COLUMN_TIMER_REMAINING_MILLIS, remainingMillis)
             put(COLUMN_TIMER_IS_ARMED, isArmed)
+            put(COLUMN_CLOCK_NUMBER_OF_CALCULATIONS, numberOfCalculations)
+            put(COLUMN_CLOCK_CORRECT_CALCULATIONS, correctCalculations)
         }
         writableDatabase.insertWithOnConflict(
             TABLE_TIMER_SETTINGS,
@@ -428,7 +444,13 @@ class ConfigurationDatabase(context: Context) :
 
     fun loadTimerProgress(): TimerProgress? = readableDatabase.query(
         TABLE_TIMER_SETTINGS,
-        arrayOf(COLUMN_TIMER_MINUTES, COLUMN_TIMER_REMAINING_MILLIS, COLUMN_TIMER_IS_ARMED),
+        arrayOf(
+            COLUMN_TIMER_MINUTES,
+            COLUMN_TIMER_REMAINING_MILLIS,
+            COLUMN_TIMER_IS_ARMED,
+            COLUMN_CLOCK_NUMBER_OF_CALCULATIONS,
+            COLUMN_CLOCK_CORRECT_CALCULATIONS,
+        ),
         "$COLUMN_TIMER_ID = ?",
         arrayOf(TIMER_ROW_ID.toString()),
         null,
@@ -440,14 +462,23 @@ class ConfigurationDatabase(context: Context) :
             minutes = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_TIMER_MINUTES)),
             remainingMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_TIMER_REMAINING_MILLIS)),
             isArmed = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_TIMER_IS_ARMED)) != 0,
+            numberOfCalculations = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_CLOCK_NUMBER_OF_CALCULATIONS)),
+            correctCalculations = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_CLOCK_CORRECT_CALCULATIONS)),
         )
     }
 
-    fun saveStopwatchProgress(elapsedMillis: Long, isArmed: Boolean) {
+    fun saveStopwatchProgress(
+        elapsedMillis: Long,
+        isArmed: Boolean,
+        numberOfCalculations: Int,
+        correctCalculations: Int,
+    ) {
         val values = ContentValues().apply {
             put(COLUMN_STOPWATCH_ID, STOPWATCH_ROW_ID)
             put(COLUMN_STOPWATCH_ELAPSED_MILLIS, elapsedMillis)
             put(COLUMN_STOPWATCH_IS_ARMED, isArmed)
+            put(COLUMN_CLOCK_NUMBER_OF_CALCULATIONS, numberOfCalculations)
+            put(COLUMN_CLOCK_CORRECT_CALCULATIONS, correctCalculations)
         }
         writableDatabase.insertWithOnConflict(
             TABLE_STOPWATCH_SETTINGS,
@@ -459,7 +490,12 @@ class ConfigurationDatabase(context: Context) :
 
     fun loadStopwatchProgress(): StopwatchProgress? = readableDatabase.query(
         TABLE_STOPWATCH_SETTINGS,
-        arrayOf(COLUMN_STOPWATCH_ELAPSED_MILLIS, COLUMN_STOPWATCH_IS_ARMED),
+        arrayOf(
+            COLUMN_STOPWATCH_ELAPSED_MILLIS,
+            COLUMN_STOPWATCH_IS_ARMED,
+            COLUMN_CLOCK_NUMBER_OF_CALCULATIONS,
+            COLUMN_CLOCK_CORRECT_CALCULATIONS,
+        ),
         "$COLUMN_STOPWATCH_ID = ?",
         arrayOf(STOPWATCH_ROW_ID.toString()),
         null,
@@ -470,6 +506,8 @@ class ConfigurationDatabase(context: Context) :
         StopwatchProgress(
             elapsedMillis = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_STOPWATCH_ELAPSED_MILLIS)),
             isArmed = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_STOPWATCH_IS_ARMED)) != 0,
+            numberOfCalculations = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_CLOCK_NUMBER_OF_CALCULATIONS)),
+            correctCalculations = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_CLOCK_CORRECT_CALCULATIONS)),
         )
     }
 
@@ -478,12 +516,14 @@ class ConfigurationDatabase(context: Context) :
         durationMinutes: Int,
         correctCalculations: Int,
         numberOfCalculations: Int,
+        elapsedMillis: Long,
     ) {
         val values = ContentValues().apply {
             put(COLUMN_FINISHED_AT, finishedAtMillis)
             put(COLUMN_DURATION_MINUTES, durationMinutes)
             put(COLUMN_CORRECT_CALCULATIONS, correctCalculations)
             put(COLUMN_NUMBER_OF_CALCULATIONS, numberOfCalculations)
+            put(COLUMN_ELAPSED_MILLIS, elapsedMillis)
         }
         writableDatabase.insertOrThrow(TABLE_TIMER_HISTORY, null, values)
     }
@@ -496,6 +536,7 @@ class ConfigurationDatabase(context: Context) :
             COLUMN_DURATION_MINUTES,
             COLUMN_CORRECT_CALCULATIONS,
             COLUMN_NUMBER_OF_CALCULATIONS,
+            COLUMN_ELAPSED_MILLIS,
         ),
         null,
         null,
@@ -509,6 +550,7 @@ class ConfigurationDatabase(context: Context) :
             val durationColumn = cursor.getColumnIndexOrThrow(COLUMN_DURATION_MINUTES)
             val correctColumn = cursor.getColumnIndexOrThrow(COLUMN_CORRECT_CALCULATIONS)
             val numberColumn = cursor.getColumnIndexOrThrow(COLUMN_NUMBER_OF_CALCULATIONS)
+            val elapsedColumn = cursor.getColumnIndexOrThrow(COLUMN_ELAPSED_MILLIS)
             while (cursor.moveToNext()) {
                 add(
                     TimerHistoryEntry(
@@ -517,6 +559,7 @@ class ConfigurationDatabase(context: Context) :
                         durationMinutes = cursor.getInt(durationColumn),
                         correctCalculations = cursor.getInt(correctColumn),
                         numberOfCalculations = cursor.getInt(numberColumn),
+                        elapsedMillis = cursor.getLong(elapsedColumn),
                     ),
                 )
             }
@@ -559,7 +602,9 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_TIMER_ID INTEGER PRIMARY KEY,
                 $COLUMN_TIMER_MINUTES INTEGER NOT NULL,
                 $COLUMN_TIMER_REMAINING_MILLIS INTEGER NOT NULL DEFAULT 0,
-                $COLUMN_TIMER_IS_ARMED INTEGER NOT NULL DEFAULT 0
+                $COLUMN_TIMER_IS_ARMED INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_CLOCK_NUMBER_OF_CALCULATIONS INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_CLOCK_CORRECT_CALCULATIONS INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -588,7 +633,8 @@ class ConfigurationDatabase(context: Context) :
                 $COLUMN_FINISHED_AT INTEGER NOT NULL,
                 $COLUMN_DURATION_MINUTES INTEGER NOT NULL,
                 $COLUMN_CORRECT_CALCULATIONS INTEGER NOT NULL,
-                $COLUMN_NUMBER_OF_CALCULATIONS INTEGER NOT NULL
+                $COLUMN_NUMBER_OF_CALCULATIONS INTEGER NOT NULL,
+                $COLUMN_ELAPSED_MILLIS INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -600,7 +646,9 @@ class ConfigurationDatabase(context: Context) :
             CREATE TABLE IF NOT EXISTS $TABLE_STOPWATCH_SETTINGS (
                 $COLUMN_STOPWATCH_ID INTEGER PRIMARY KEY,
                 $COLUMN_STOPWATCH_ELAPSED_MILLIS INTEGER NOT NULL,
-                $COLUMN_STOPWATCH_IS_ARMED INTEGER NOT NULL
+                $COLUMN_STOPWATCH_IS_ARMED INTEGER NOT NULL,
+                $COLUMN_CLOCK_NUMBER_OF_CALCULATIONS INTEGER NOT NULL DEFAULT 0,
+                $COLUMN_CLOCK_CORRECT_CALCULATIONS INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -634,6 +682,29 @@ class ConfigurationDatabase(context: Context) :
     private fun addLanguageColumn(database: SQLiteDatabase) {
         if (!hasColumn(database, TABLE_SETTINGS, COLUMN_LANGUAGE_TAG)) {
             database.execSQL("ALTER TABLE $TABLE_SETTINGS ADD COLUMN $COLUMN_LANGUAGE_TAG TEXT")
+        }
+    }
+
+    private fun addClockCalculationColumns(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_TIMER_SETTINGS, COLUMN_CLOCK_NUMBER_OF_CALCULATIONS)) {
+            database.execSQL("ALTER TABLE $TABLE_TIMER_SETTINGS ADD COLUMN $COLUMN_CLOCK_NUMBER_OF_CALCULATIONS INTEGER NOT NULL DEFAULT 0")
+        }
+        if (!hasColumn(database, TABLE_TIMER_SETTINGS, COLUMN_CLOCK_CORRECT_CALCULATIONS)) {
+            database.execSQL("ALTER TABLE $TABLE_TIMER_SETTINGS ADD COLUMN $COLUMN_CLOCK_CORRECT_CALCULATIONS INTEGER NOT NULL DEFAULT 0")
+        }
+        if (!hasColumn(database, TABLE_STOPWATCH_SETTINGS, COLUMN_CLOCK_NUMBER_OF_CALCULATIONS)) {
+            database.execSQL("ALTER TABLE $TABLE_STOPWATCH_SETTINGS ADD COLUMN $COLUMN_CLOCK_NUMBER_OF_CALCULATIONS INTEGER NOT NULL DEFAULT 0")
+        }
+        if (!hasColumn(database, TABLE_STOPWATCH_SETTINGS, COLUMN_CLOCK_CORRECT_CALCULATIONS)) {
+            database.execSQL("ALTER TABLE $TABLE_STOPWATCH_SETTINGS ADD COLUMN $COLUMN_CLOCK_CORRECT_CALCULATIONS INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private fun addHistoryElapsedColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_TIMER_HISTORY, COLUMN_ELAPSED_MILLIS)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_TIMER_HISTORY ADD COLUMN $COLUMN_ELAPSED_MILLIS INTEGER NOT NULL DEFAULT 0",
+            )
         }
     }
 
@@ -711,7 +782,7 @@ class ConfigurationDatabase(context: Context) :
 
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 15
+        const val DATABASE_VERSION = 17
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -738,12 +809,15 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_STOPWATCH_ID = "id"
         const val COLUMN_STOPWATCH_ELAPSED_MILLIS = "elapsed_millis"
         const val COLUMN_STOPWATCH_IS_ARMED = "is_armed"
+        const val COLUMN_CLOCK_NUMBER_OF_CALCULATIONS = "number_of_calculations"
+        const val COLUMN_CLOCK_CORRECT_CALCULATIONS = "correct_calculations"
         const val STOPWATCH_ROW_ID = 1
         const val COLUMN_HISTORY_ID = "history_id"
         const val COLUMN_FINISHED_AT = "finished_at"
         const val COLUMN_DURATION_MINUTES = "duration_minutes"
         const val COLUMN_CORRECT_CALCULATIONS = "correct_calculations"
         const val COLUMN_NUMBER_OF_CALCULATIONS = "number_of_calculations"
+        const val COLUMN_ELAPSED_MILLIS = "elapsed_millis"
         const val COLUMN_SETTINGS_ID = "id"
         const val COLUMN_SETTINGS_PIN = "pin"
         const val COLUMN_LANGUAGE_TAG = "language_tag"

@@ -14,7 +14,7 @@
     <string name="start_new_question">En démarrer un nouveau ?</string>
     <string name="keep_current">Non, conserver l’actuel</string>
     <string name="start_new_timer">Démarrer un nouveau minuteur</string>
-    <string name="start_new_stopwatch">Démarrer un nouveau chronomètre</string>
+    <string name="start_new_stopwatch">Démarrer le chronomètre</string>
     <string name="timer_history">Historique du minuteur</string>
     <string name="no_finished_timers">Aucun minuteur terminé pour le moment.</string>
     <string name="close">Fermer</string>

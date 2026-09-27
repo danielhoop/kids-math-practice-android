@@ -142,6 +142,7 @@ fun TimesTablesApp(model: PracticeViewModel = viewModel()) {
 private fun OperatorScreen(model: PracticeViewModel) {
     val context = LocalContext.current
     var showTimerDialog by remember { mutableStateOf(false) }
+    var showStopwatchDialog by remember { mutableStateOf(false) }
     var showReplaceClockConfirmation by remember { mutableStateOf(false) }
     var replacementIsStopwatch by remember { mutableStateOf(false) }
     var showTimerHistoryDialog by remember { mutableStateOf(false) }
@@ -180,12 +181,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                 Text(stringResource(R.string.timer_button), fontSize = 21.sp)
             }
             Button(onClick = {
-                if (model.isPracticeClockActive) {
-                    replacementIsStopwatch = true
-                    showReplaceClockConfirmation = true
-                } else {
-                    model.configureStopwatch()
-                }
+                showStopwatchDialog = true
             }) {
                 Text(stringResource(R.string.stopwatch_button), fontSize = 21.sp)
             }
@@ -326,6 +322,59 @@ private fun OperatorScreen(model: PracticeViewModel) {
         )
     }
 
+    if (showStopwatchDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopwatchDialog = false },
+            containerColor = DefaultGray,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(stringResource(R.string.stopwatch_button), fontWeight = FontWeight.Bold)
+                    TextButton(
+                        onClick = {
+                            showStopwatchDialog = false
+                            showTimerHistoryDialog = true
+                            model.loadTimerHistory()
+                        },
+                    ) {
+                        Text(stringResource(R.string.history))
+                    }
+                }
+            },
+            text = { Text(formatTimer(model.elapsedStopwatchSeconds)) },
+            confirmButton = {
+                Button(onClick = {
+                    if (model.isPracticeClockActive) {
+                        replacementIsStopwatch = true
+                        showReplaceClockConfirmation = true
+                    } else {
+                        model.configureStopwatch()
+                        showStopwatchDialog = false
+                    }
+                }) {
+                    Text(stringResource(R.string.start_new_stopwatch))
+                }
+            },
+            dismissButton = {
+                if (model.stopwatchIsArmed) {
+                    TextButton(onClick = {
+                        model.stopStopwatch()
+                        showStopwatchDialog = false
+                    }) {
+                        Text(stringResource(R.string.stop_stopwatch))
+                    }
+                } else {
+                    TextButton(onClick = { showStopwatchDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            },
+        )
+    }
+
     if (showReplaceClockConfirmation) {
         AlertDialog(
             onDismissRequest = { showReplaceClockConfirmation = false },
@@ -336,6 +385,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                 Button(onClick = {
                     showReplaceClockConfirmation = false
                     showTimerDialog = false
+                    showStopwatchDialog = false
                 }) {
                     Text(stringResource(R.string.keep_current))
                 }
@@ -350,6 +400,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                     }
                     showReplaceClockConfirmation = false
                     showTimerDialog = false
+                    showStopwatchDialog = false
                 }) {
                     Text(stringResource(if (replacementIsStopwatch) R.string.start_new_stopwatch else R.string.start_new_timer))
                 }
@@ -384,7 +435,7 @@ private fun OperatorScreen(model: PracticeViewModel) {
                             val cups = historyCups(entry)
                             Text(
                                 text = "${formatHistoryDate(entry.finishedAtMillis)}, " +
-                                    "${entry.durationMinutes} min " +
+                                    "${formatHistoryDuration(entry)} " +
                                     "(${entry.correctCalculations}/${entry.numberOfCalculations}" +
                                     if (cups > 0) " ${"🏆".repeat(cups)})" else ")",
                                 fontSize = 17.sp,
@@ -1244,6 +1295,15 @@ private fun formatHistoryDate(timestampMillis: Long): String =
         .format(Date(timestampMillis))
         .trimEnd('.') + "., " +
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+
+private fun formatHistoryDuration(entry: TimerHistoryEntry): String {
+    val elapsedMillis = if (entry.elapsedMillis > 0L) {
+        entry.elapsedMillis
+    } else {
+        entry.durationMinutes * 60_000L
+    }
+    return formatTimer(((elapsedMillis + 999L) / 1000L).toInt())
+}
 
 private fun historyCups(entry: TimerHistoryEntry): Int {
     if (entry.numberOfCalculations == 0) return 0
