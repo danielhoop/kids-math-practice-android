@@ -159,6 +159,24 @@ class PracticeEngineTest {
     }
 
     @Test
+    fun customizedDisplaySignsAreUsedInQuestionsAndHints() {
+        val signs = DisplaySigns(multiplication = "·", division = "/")
+
+        assertEquals(
+            "6 · 4",
+            Calculation(MathOperator.MULTIPLY, 4, 6, swapRoles = false).expression(signs),
+        )
+        assertEquals(
+            "21 / 3",
+            Calculation(MathOperator.DIVIDE, 3, 7, swapRoles = false).expression(signs),
+        )
+        assertEquals(
+            "3 · _ = 6",
+            Calculation(MathOperator.DIVIDE, 3, 2, swapRoles = false).hintLines(signs)?.first(),
+        )
+    }
+
+    @Test
     fun hintsAreAvailableForMultiplicationAndDivision() {
         assertTrue(Calculation(MathOperator.MULTIPLY, 2, 6, false).hintLines() != null)
         assertTrue(Calculation(MathOperator.MULTIPLY, 9, 6, false).hintLines() != null)

@@ -20,6 +20,18 @@ enum class MathOperator(val symbol: String) {
     MIXED("×÷"),
 }
 
+data class DisplaySigns(
+    val multiplication: String = "×",
+    val division: String = "÷",
+) {
+    fun forOperator(operator: MathOperator): String = when (operator) {
+        MathOperator.MULTIPLY -> multiplication
+        MathOperator.DIVIDE -> division
+        MathOperator.MIXED -> multiplication + division
+        else -> operator.symbol
+    }
+}
+
 data class Calculation(
     val operator: MathOperator,
     val firstNumber: Int,
@@ -39,27 +51,30 @@ data class Calculation(
         }
 
     val expression: String
-        get() = when (calculationOperator) {
-            MathOperator.ADDITION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
-            MathOperator.SUBTRACTION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
-            MathOperator.MULTIPLY -> {
-                val left = if (swapRoles) firstNumber else secondNumber
-                val right = if (swapRoles) secondNumber else firstNumber
-                "$left ${calculationOperator.symbol} $right"
-            }
+        get() = expression()
 
-            MathOperator.DIVIDE -> {
-                val product = firstNumber * secondNumber
-                "$product ${calculationOperator.symbol} $firstNumber"
-            }
-
-            MathOperator.MIXED -> error("Mixed mode requires a concrete calculation operator")
+    fun expression(signs: DisplaySigns = DisplaySigns()): String = when (calculationOperator) {
+        MathOperator.ADDITION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
+        MathOperator.SUBTRACTION -> "$firstNumber ${calculationOperator.symbol} $secondNumber"
+        MathOperator.MULTIPLY -> {
+            val left = if (swapRoles) firstNumber else secondNumber
+            val right = if (swapRoles) secondNumber else firstNumber
+            "$left ${signs.forOperator(calculationOperator)} $right"
         }
+
+        MathOperator.DIVIDE -> {
+            val product = firstNumber * secondNumber
+            "$product ${signs.forOperator(calculationOperator)} $firstNumber"
+        }
+
+        MathOperator.MIXED -> error("Mixed mode requires a concrete calculation operator")
+    }
+
 }
 
 /** Returns the optional, monospaced arithmetic hint for a multiplication table. */
-fun Calculation.hintLines(): List<String>? {
-    if (calculationOperator == MathOperator.DIVIDE) return divisionHintLines()
+fun Calculation.hintLines(signs: DisplaySigns = DisplaySigns()): List<String>? {
+    if (calculationOperator == MathOperator.DIVIDE) return divisionHintLines(signs)
     if (calculationOperator != MathOperator.MULTIPLY) return null
     val factors = listOf(firstNumber, secondNumber)
     val eligibleTargets = factors
@@ -69,13 +84,13 @@ fun Calculation.hintLines(): List<String>? {
         }
         .distinct()
         .sortedBy { HintPriority.indexOf(it) }
-    val fiveComplement = fiveComplementHintLines(firstNumber, secondNumber)
+    val fiveComplement = fiveComplementHintLines(firstNumber, secondNumber, signs)
     if (eligibleTargets.isEmpty() && fiveComplement == null) return null
 
     val approaches = buildList {
         addAll(eligibleTargets.map { target ->
             val x = factors.firstOrNull { it != target } ?: target
-            hintLinesForTarget(target, x)
+            hintLinesForTarget(target, x, signs)
         })
         fiveComplement?.let(::add)
     }
@@ -91,7 +106,7 @@ fun Calculation.hintLines(): List<String>? {
     }
 }
 
-private fun Calculation.divisionHintLines(): List<String> {
+private fun Calculation.divisionHintLines(signs: DisplaySigns): List<String> {
     val divisor = firstNumber
     val dividend = firstNumber * secondNumber
     val result = secondNumber
@@ -104,7 +119,7 @@ private fun Calculation.divisionHintLines(): List<String> {
     fun n(value: Int) = value.toString().padStart(width, ' ')
     fun blank() = "_".repeat(width)
 
-    val inverse = "${n(divisor)} × ${blank()} = ${n(dividend)}"
+    val inverse = "${n(divisor)} ${signs.multiplication} ${blank()} = ${n(dividend)}"
     if (anchor == null) return listOf(inverse)
 
     val anchorDividend = anchor * divisor
@@ -121,12 +136,12 @@ private fun Calculation.divisionHintLines(): List<String> {
         "",
         HINT_SEPARATOR,
         "",
-        "${n(anchorDividend)} ÷ ${n(divisor)} = ${n(anchor)}",
+        "${n(anchorDividend)} ${signs.division} ${n(divisor)} = ${n(anchor)}",
         difference,
     )
 }
 
-private fun fiveComplementHintLines(first: Int, second: Int): List<String>? {
+private fun fiveComplementHintLines(first: Int, second: Int, signs: DisplaySigns): List<String>? {
     if (first != 5 && second != 5) return null
     val other = if (first == 5) second else first
     val complement = when (other) {
@@ -141,12 +156,12 @@ private fun fiveComplementHintLines(first: Int, second: Int): List<String>? {
     val width = maxOf(complement, 5, firstResult, answer).digits()
     fun n(value: Int) = value.toString().padStart(width, ' ')
     return listOf(
-        "${n(complement)} × ${n(5)} = ${n(firstResult)}",
+        "${n(complement)} ${signs.multiplication} ${n(5)} = ${n(firstResult)}",
         "${n(firstResult)} + ${n(5)} = ${n(answer)}",
     )
 }
 
-private fun hintLinesForTarget(target: Int, x: Int): List<String> {
+private fun hintLinesForTarget(target: Int, x: Int, signs: DisplaySigns): List<String> {
     val fiveTimes = 5 * x
     val tenTimes = 10 * x
     val answer = target * x
@@ -164,23 +179,23 @@ private fun hintLinesForTarget(target: Int, x: Int): List<String> {
         2 -> listOf("${n(x)} + ${n(x)} = ${blank()}")
         3 -> listOf("${n(x)} + ${n(x)} + ${n(x)} = ${blank()}")
         4 -> listOf(
-            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "5 ${signs.multiplication} ${n(x)} = ${n(fiveTimes)}",
             "${n(fiveTimes)} - ${n(x)} = ${blank()}",
         )
         6 -> listOf(
-            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "5 ${signs.multiplication} ${n(x)} = ${n(fiveTimes)}",
             "${n(fiveTimes)} + ${n(x)} = ${blank()}",
         )
         7 -> listOf(
-            "5 × ${n(x)} = ${n(fiveTimes)}",
+            "5 ${signs.multiplication} ${n(x)} = ${n(fiveTimes)}",
             "${n(fiveTimes)} + ${n(x)} + ${n(x)} = ${blank()}",
         )
         8 -> listOf(
-            "10 × ${n(x)} = ${n(tenTimes)}",
+            "10 ${signs.multiplication} ${n(x)} = ${n(tenTimes)}",
             "${n(tenTimes)} - ${n(x)} - ${n(x)} = ${blank()}",
         )
         9 -> listOf(
-            "10 × ${n(x)} = ${n(tenTimes)}",
+            "10 ${signs.multiplication} ${n(x)} = ${n(tenTimes)}",
             "${n(tenTimes)} - ${n(x)} = ${blank()}",
         )
         else -> emptyList()

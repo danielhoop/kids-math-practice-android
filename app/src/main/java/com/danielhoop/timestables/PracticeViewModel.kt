@@ -116,6 +116,8 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         private set
     var divisionHighestDigitsHintAllowed by mutableStateOf(true)
         private set
+    var displaySigns by mutableStateOf(DisplaySigns())
+        private set
 
     private var highestNumber = 10
     private var firstNumber = 1
@@ -158,6 +160,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     configurationDatabase.loadHighestDigitsHintAllowed(MathOperator.DIVIDE),
                 )
             }
+            val signs = withContext(Dispatchers.IO) {
+                DisplaySigns(
+                    multiplication = configurationDatabase.loadDisplaySign(MathOperator.MULTIPLY),
+                    division = configurationDatabase.loadDisplaySign(MathOperator.DIVIDE),
+                )
+            }
             settingsPin = pin
             multiplicationNumbers = multiplication
             divisionNumbers = division
@@ -170,6 +178,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             divisionShowHints = hintSettings[3]
             multiplicationHighestDigitsHintAllowed = hintSettings[4]
             divisionHighestDigitsHintAllowed = hintSettings[5]
+            displaySigns = signs
             settingsPinLoaded = true
         }
         viewModelScope.launch {
@@ -308,6 +317,17 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
         if (operator == MathOperator.MULTIPLY) multiplicationShowHints else divisionShowHints
 
     fun showHintsFor(calculation: Calculation): Boolean = showHints(calculation.calculationOperator)
+
+    fun updateDisplaySign(operator: MathOperator, sign: String) {
+        displaySigns = when (operator) {
+            MathOperator.MULTIPLY -> displaySigns.copy(multiplication = sign)
+            MathOperator.DIVIDE -> displaySigns.copy(division = sign)
+            else -> return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            configurationDatabase.saveDisplaySign(operator, sign)
+        }
+    }
 
     fun updateShowHints(operator: MathOperator, show: Boolean) {
         if (operator == MathOperator.MULTIPLY) multiplicationShowHints = show else divisionShowHints = show

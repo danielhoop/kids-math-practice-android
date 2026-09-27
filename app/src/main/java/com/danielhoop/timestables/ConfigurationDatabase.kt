@@ -99,6 +99,7 @@ class ConfigurationDatabase(context: Context) :
         if (oldVersion < 17) addHistoryElapsedColumn(database)
         if (oldVersion < 18) addHighestDigitsHintColumns(database)
         if (oldVersion < 19) addHighestDigitsHintAllowedColumn(database)
+        if (oldVersion < 20) addDisplaySignColumn(database)
     }
 
     override fun onOpen(database: SQLiteDatabase) {
@@ -296,17 +297,19 @@ class ConfigurationDatabase(context: Context) :
     }
 
     fun saveShowHints(operator: MathOperator, showHints: Boolean) {
-        val values = ContentValues().apply {
-            put(COLUMN_OPERATOR, operator.name)
-            put(COLUMN_SHOW_HINTS, showHints)
-            put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, loadHighestDigitsHintAllowed(operator))
+        val values = ContentValues().apply { put(COLUMN_SHOW_HINTS, showHints) }
+        if (writableDatabase.update(
+                TABLE_OPERATOR_SETTINGS,
+                values,
+                "$COLUMN_OPERATOR = ?",
+                arrayOf(operator.name),
+            ) == 0
+        ) {
+            values.put(COLUMN_OPERATOR, operator.name)
+            values.put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, true)
+            values.put(COLUMN_DISPLAY_SIGN, defaultDisplaySign(operator))
+            writableDatabase.insertOrThrow(TABLE_OPERATOR_SETTINGS, null, values)
         }
-        writableDatabase.insertWithOnConflict(
-            TABLE_OPERATOR_SETTINGS,
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
     }
 
     fun loadHighestDigitsHintAllowed(operator: MathOperator): Boolean = readableDatabase.query(
@@ -322,17 +325,54 @@ class ConfigurationDatabase(context: Context) :
     }
 
     fun saveHighestDigitsHintAllowed(operator: MathOperator, allowed: Boolean) {
-        val values = ContentValues().apply {
-            put(COLUMN_OPERATOR, operator.name)
-            put(COLUMN_SHOW_HINTS, loadShowHints(operator))
-            put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, allowed)
+        val values = ContentValues().apply { put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, allowed) }
+        if (writableDatabase.update(
+                TABLE_OPERATOR_SETTINGS,
+                values,
+                "$COLUMN_OPERATOR = ?",
+                arrayOf(operator.name),
+            ) == 0
+        ) {
+            values.put(COLUMN_OPERATOR, operator.name)
+            values.put(COLUMN_SHOW_HINTS, true)
+            values.put(COLUMN_DISPLAY_SIGN, defaultDisplaySign(operator))
+            writableDatabase.insertOrThrow(TABLE_OPERATOR_SETTINGS, null, values)
         }
-        writableDatabase.insertWithOnConflict(
-            TABLE_OPERATOR_SETTINGS,
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE,
-        )
+    }
+
+    fun loadDisplaySign(operator: MathOperator): String = readableDatabase.query(
+        TABLE_OPERATOR_SETTINGS,
+        arrayOf(COLUMN_DISPLAY_SIGN),
+        "$COLUMN_OPERATOR = ?",
+        arrayOf(operator.name),
+        null,
+        null,
+        null,
+    ).use { cursor ->
+        val default = defaultDisplaySign(operator)
+        if (cursor.moveToFirst()) {
+            cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DISPLAY_SIGN))
+                ?.takeIf { it in allowedDisplaySigns(operator) } ?: default
+        } else {
+            default
+        }
+    }
+
+    fun saveDisplaySign(operator: MathOperator, sign: String) {
+        require(sign in allowedDisplaySigns(operator))
+        val values = ContentValues().apply { put(COLUMN_DISPLAY_SIGN, sign) }
+        if (writableDatabase.update(
+                TABLE_OPERATOR_SETTINGS,
+                values,
+                "$COLUMN_OPERATOR = ?",
+                arrayOf(operator.name),
+            ) == 0
+        ) {
+            values.put(COLUMN_OPERATOR, operator.name)
+            values.put(COLUMN_SHOW_HINTS, true)
+            values.put(COLUMN_HIGHEST_DIGITS_HINT_ALLOWED, true)
+            writableDatabase.insertOrThrow(TABLE_OPERATOR_SETTINGS, null, values)
+        }
     }
 
     fun saveAdditionConfiguration(configuration: AdditionConfiguration) {
@@ -743,7 +783,8 @@ class ConfigurationDatabase(context: Context) :
             CREATE TABLE IF NOT EXISTS $TABLE_OPERATOR_SETTINGS (
                 $COLUMN_OPERATOR TEXT PRIMARY KEY,
                 $COLUMN_SHOW_HINTS INTEGER NOT NULL DEFAULT 1,
-                $COLUMN_HIGHEST_DIGITS_HINT_ALLOWED INTEGER NOT NULL DEFAULT 1
+                $COLUMN_HIGHEST_DIGITS_HINT_ALLOWED INTEGER NOT NULL DEFAULT 1,
+                $COLUMN_DISPLAY_SIGN TEXT NOT NULL DEFAULT '×'
             )
             """.trimIndent(),
         )
@@ -831,9 +872,29 @@ class ConfigurationDatabase(context: Context) :
         }
     }
 
+    private fun addDisplaySignColumn(database: SQLiteDatabase) {
+        if (!hasColumn(database, TABLE_OPERATOR_SETTINGS, COLUMN_DISPLAY_SIGN)) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_OPERATOR_SETTINGS ADD COLUMN " +
+                    "$COLUMN_DISPLAY_SIGN TEXT NOT NULL DEFAULT '×'",
+            )
+        }
+    }
+
+    private fun defaultDisplaySign(operator: MathOperator): String = when (operator) {
+        MathOperator.DIVIDE -> "÷"
+        else -> "×"
+    }
+
+    private fun allowedDisplaySigns(operator: MathOperator): Set<String> = when (operator) {
+        MathOperator.MULTIPLY -> setOf("×", "·")
+        MathOperator.DIVIDE -> setOf("÷", ":", "/")
+        else -> emptySet()
+    }
+
     private companion object {
         const val DATABASE_NAME = "times_tables.db"
-        const val DATABASE_VERSION = 19
+        const val DATABASE_VERSION = 20
         const val TABLE_CONFIGURATION = "practice_configuration"
         const val TABLE_SCORE = "last_score"
         const val TABLE_TIMER_SETTINGS = "timer_settings"
@@ -877,6 +938,7 @@ class ConfigurationDatabase(context: Context) :
         const val COLUMN_SHOW_HINTS = "show_hints"
         const val COLUMN_HIGHEST_DIGITS_HINT = "highest_digits_hint"
         const val COLUMN_HIGHEST_DIGITS_HINT_ALLOWED = "highest_digits_hint_allowed"
+        const val COLUMN_DISPLAY_SIGN = "display_sign"
         const val COLUMN_ADDITION_ID = "id"
         const val COLUMN_HIGHEST_INPUT = "highest_input"
         const val COLUMN_HIGHEST_RESULT = "highest_result"

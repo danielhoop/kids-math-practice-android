@@ -48,6 +48,9 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -170,11 +173,16 @@ private fun OperatorScreen(model: PracticeViewModel) {
                 OperatorButton("-") { model.chooseOperator(MathOperator.SUBTRACTION) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OperatorButton("×") { model.chooseOperator(MathOperator.MULTIPLY) }
-                OperatorButton("÷") { model.chooseOperator(MathOperator.DIVIDE) }
+                OperatorButton(model.displaySigns.multiplication) { model.chooseOperator(MathOperator.MULTIPLY) }
+                OperatorButton(model.displaySigns.division) { model.chooseOperator(MathOperator.DIVIDE) }
             }
             Row {
-                OperatorButton("×÷") { model.chooseOperator(MathOperator.MIXED) }
+                OperatorButton(
+                    "${model.displaySigns.multiplication} ${model.displaySigns.division}",
+                    compact = true,
+                ) {
+                    model.chooseOperator(MathOperator.MIXED)
+                }
             }
         }
         Spacer(Modifier.height(34.dp))
@@ -458,13 +466,14 @@ private fun OperatorScreen(model: PracticeViewModel) {
 }
 
 @Composable
-private fun OperatorButton(symbol: String, onClick: () -> Unit) {
+private fun OperatorButton(symbol: String, compact: Boolean = false, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         modifier = Modifier.size(96.dp),
         shape = RoundedCornerShape(28.dp),
+        contentPadding = if (compact) PaddingValues(horizontal = 8.dp) else ButtonDefaults.ContentPadding,
     ) {
-        Text(symbol, fontSize = if (symbol == "×÷") 42.sp else 54.sp, fontWeight = FontWeight.Bold)
+        Text(symbol, fontSize = if (symbol.length > 1) 42.sp else 54.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -610,7 +619,7 @@ private fun SetupScreen(model: PracticeViewModel) {
                 ) {
                     Column {
                         Text(
-                            "3 × 6 ↔ 6 × 3",
+                            "3 ${model.displaySigns.multiplication} 6 ↔ 6 ${model.displaySigns.multiplication} 3",
                             fontSize = ConfigurationLabelFontSize,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -891,6 +900,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
             )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.multiplication), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            SignSelector(
+                signs = listOf("×", "·"),
+                selectedSign = model.displaySigns.multiplication,
+                onSignSelected = { model.updateDisplaySign(MathOperator.MULTIPLY, it) },
+            )
             SettingsHintsSwitch(
                 enabled = model.multiplicationShowHints,
                 onEnabledChange = { model.updateShowHints(MathOperator.MULTIPLY, it) },
@@ -909,6 +923,11 @@ private fun SettingsScreen(model: PracticeViewModel) {
             )
             Spacer(Modifier.height(24.dp))
             Text(stringResource(R.string.division), fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            SignSelector(
+                signs = listOf("÷", ":", "/"),
+                selectedSign = model.displaySigns.division,
+                onSignSelected = { model.updateDisplaySign(MathOperator.DIVIDE, it) },
+            )
             SettingsHintsSwitch(
                 enabled = model.divisionShowHints,
                 onEnabledChange = { model.updateShowHints(MathOperator.DIVIDE, it) },
@@ -941,6 +960,29 @@ private fun SettingsScreen(model: PracticeViewModel) {
             }
         }
     }
+}
+
+@Composable
+private fun SignSelector(
+    signs: List<String>,
+    selectedSign: String,
+    onSignSelected: (String) -> Unit,
+) {
+    Text("Sign", fontSize = 19.sp)
+    Spacer(Modifier.height(6.dp))
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        signs.forEachIndexed { index, sign ->
+            SegmentedButton(
+                selected = sign == selectedSign,
+                onClick = { onSignSelected(sign) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = signs.size),
+                icon = {},
+            ) {
+                Text(sign, fontSize = 22.sp)
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
@@ -978,7 +1020,7 @@ private fun SettingsNumberRow(number: Int, enabled: Boolean, onEnabledChange: (B
 @Composable
 private fun PracticeScreen(model: PracticeViewModel) {
     val calculation = model.currentCalculation ?: return
-    val hintLines = if (model.showHintsFor(calculation)) calculation.hintLines() else null
+    val hintLines = if (model.showHintsFor(calculation)) calculation.hintLines(model.displaySigns) else null
     val highestDigitsHint = model.highestDigitsHintFor(calculation)
     var showHintDialog by remember(model.calculationNumber) { mutableStateOf(false) }
     var showHighestDigitsHint by remember(model.calculationNumber) { mutableStateOf(false) }
@@ -1064,7 +1106,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             }
             Spacer(Modifier.weight(0.65f))
             Text(
-                text = calculation.expression,
+                text = calculation.expression(model.displaySigns),
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
                 fontSize = 56.sp,
@@ -1176,7 +1218,11 @@ private fun PracticeScreen(model: PracticeViewModel) {
             containerColor = DefaultGray,
             text = {
                 Text(
-                    stringResource(R.string.correct_answer_format, wrongCalculation.expression, wrongCalculation.expectedAnswer),
+                    stringResource(
+                        R.string.correct_answer_format,
+                        wrongCalculation.expression(model.displaySigns),
+                        wrongCalculation.expectedAnswer,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = 40.sp,
                     lineHeight = 48.sp,
@@ -1200,7 +1246,7 @@ private fun PracticeScreen(model: PracticeViewModel) {
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        retryCalculation.expression,
+                        retryCalculation.expression(model.displaySigns),
                         modifier = Modifier.fillMaxWidth(),
                         fontSize = 40.sp,
                         lineHeight = 48.sp,
